@@ -1,0 +1,57 @@
+{
+  "folders": [
+    {
+      "name": "frontend",
+      "path": "frontend",
+    },
+    {
+      "name": "backend",
+      "path": "backend",
+    },
+    {
+      "name": "recsys",
+      "path": "recsys",
+    },
+    {
+      "name": "flowbeat(root)",
+      "path": ".",
+    },
+  ],
+
+  "settings": {
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/.venv": true,
+      "**/dist": true,
+      "**/.git": true,
+      "**/__pycache__": true,
+      "**/.pytest_cache": true,
+      "frontend/": true,
+      "backend/": true,
+      "recsys/": true,
+    },
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "[python]": {
+      "editor.defaultFormatter": "charliermarsh.ruff",
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.fixAll.ruff": "explicit",
+        "source.organizeImports.ruff": "explicit",
+      },
+    },
+    "[vue]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+    },
+    "[javascript]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+    },
+    "[typescript]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+    },
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit",
+    },
+    "python.analysis.typeCheckingMode": "basic",
+  },
+}
