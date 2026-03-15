@@ -57,5 +57,8 @@
       "source.fixAll.eslint": "explicit",
     },
     "python.analysis.typeCheckingMode": "basic",
+    "[toml]": {
+      "editor.defaultFormatter": "tamasfe.even-better-toml",
+    },
   },
 }
