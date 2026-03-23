@@ -10,6 +10,7 @@ description: Flowbeat 推荐算法开发规范
 ## 技术栈要求
 - 核心框架：PyTorch (>=2.6.0), torchaudio (>=2.6.0), torchvision (>=0.21.0)。
 - 语言：Python (要求遵循 PEP 8 规范，使用类型提示)。
+- 依赖管理：uv + pyproject.toml，安装依赖严格使用 uv add 命令。
 
 ## 算法架构与数据流规范
 1. 模型架构：主要基于双塔模型 (Two-Tower Model)，包含用户塔 (User Tower) 和物品塔 (Item/Track Tower)。模型定义需采用面向对象的 `nn.Module` 编写，结构清晰。

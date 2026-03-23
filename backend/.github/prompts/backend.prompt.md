@@ -14,6 +14,8 @@ description: Flowbeat 后端开发规范
 - 数据库迁移：Alembic。
 - 缓存与消息：Redis。
 - 对象存储：MinIO (用于存储音频文件和封面图片)。
+- 认证与授权：JWT (JSON Web Tokens)。
+- 依赖管理：uv + pyproject.toml，安装依赖严格使用 uv add 命令。
 
 ## 架构与 API 规范预设
 
