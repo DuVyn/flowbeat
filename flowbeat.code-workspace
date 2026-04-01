@@ -1,21 +1,10 @@
 {
   "folders": [
-    {
-      "name": "frontend",
-      "path": "frontend",
-    },
-    {
-      "name": "backend",
-      "path": "backend",
-    },
-    {
-      "name": "recsys",
-      "path": "recsys",
-    },
-    {
-      "name": "flowbeat(root)",
-      "path": ".",
-    },
+    { "name": "frontend", "path": "frontend" },
+    { "name": "backend", "path": "backend" },
+    { "name": "recsys", "path": "recsys" },
+    { "name": "scripts", "path": "scripts" },
+    { "name": "flowbeat(root)", "path": "." },
   ],
 
   "settings": {
@@ -26,6 +15,7 @@
       "frontend/": true,
       "backend/": true,
       "recsys/": true,
+      "scripts/": true,
     },
     "search.exclude": {
       "**/dist": true,
