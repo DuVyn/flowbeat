@@ -5,14 +5,18 @@
 - data/raw/song_extra_info.csv: name
 """
 
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import BigInteger, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.models.associations import song_composer_m2m, song_genre_m2m, song_lyricist_m2m
-from app.models.music_meta import Composer, Genre, Lyricist
+from app.models.song_meta import Composer, Genre, Lyricist
+
+if TYPE_CHECKING:
+    from app.models.play_count import PlayCount
+    from app.models.play_history import PlayHistory
 
 
 class Song(Base):
@@ -34,6 +38,8 @@ class Song(Base):
     song_length: Mapped[Optional[int]] = mapped_column(Integer)
     # 语言代码（如 3.0/31.0/52.0 等）。
     language: Mapped[Optional[float]] = mapped_column(Float)
+    # MinIO 对象键（示例：flac/track_001.flac），仅存稳定路径，不存临时签名 URL。
+    audio_object_key: Mapped[Optional[str]] = mapped_column(String(512))
 
     # 歌曲与流派的多对多关系（songs.genre_ids 拆分后的结果）。
     genres: Mapped[List["Genre"]] = relationship(
@@ -46,4 +52,15 @@ class Song(Base):
     # 歌曲与作词家的多对多关系（songs.lyricist 拆分后的结果）。
     lyricists: Mapped[List["Lyricist"]] = relationship(
         secondary=song_lyricist_m2m, lazy="selectin"
+    )
+    # 歌曲被播放历史引用，一对多关系。
+    play_histories: Mapped[List["PlayHistory"]] = relationship(
+        back_populates="song", cascade="all, delete-orphan", lazy="selectin"
+    )
+    # 歌曲播放次数聚合，一对一关系（每首歌一行）。
+    play_count: Mapped[Optional["PlayCount"]] = relationship(
+        back_populates="song",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )

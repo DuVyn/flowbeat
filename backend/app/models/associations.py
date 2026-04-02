@@ -1,6 +1,6 @@
 """多对多关联表定义。
 
-用于连接歌曲、用户与元数据维表，支撑范式化后的关系建模。
+用于连接歌曲与元数据维表，支撑范式化后的关系建模。
 """
 
 from sqlalchemy import BigInteger, Column, ForeignKey, Table
@@ -57,24 +57,6 @@ song_lyricist_m2m = Table(
         "lyricist_id",
         BigInteger,
         ForeignKey("lyricists.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-)
-
-# 用户 <-> 偏好流派
-user_genre_preference_m2m = Table(
-    "user_genre_preference_m2m",
-    Base.metadata,
-    Column(
-        "user_id",
-        BigInteger,
-        ForeignKey("users.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-    Column(
-        "genre_id",
-        BigInteger,
-        ForeignKey("genres.id", ondelete="CASCADE"),
         primary_key=True,
     ),
 )

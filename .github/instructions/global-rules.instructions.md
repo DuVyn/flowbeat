@@ -171,12 +171,13 @@ applyTo: "**/*"
 - **变更管理**：数据库变更必须提供迁移方案（如 Alembic）。API 变更必须同步更新 `docs/` 中的接口契约。
 - **推荐系统兼容性**：涉及推荐结果结构变更时，必须标注版本并确保至少兼容一个旧版本的读取逻辑。
 - **开发环境与工具链**：
-    - Python 代码静态检查与格式化统一使用 **ruff** (`ruff check` / `ruff format`)。
-    - 前端（TypeScript/Vue/JSON/Markdown）统一使用 **prettier** 格式化。
+  - Python 代码静态检查与格式化统一使用 **ruff** (`ruff check` / `ruff format`)。
+  - 前端（TypeScript/Vue/JSON/Markdown）统一使用 **prettier** 格式化。
 - **代码提交检查**：所有目录在提交前必须通过相应的自动化检查：
-    - `backend/`、`recsys/`、`scripts/`：必须通过 `ruff check` 并执行 `ruff format`。
-    - `frontend/`：必须执行 `prettier` 格式化并确保无格式差异。
+  - `backend/`、`recsys/`、`scripts/`：必须通过 `ruff check` 并执行 `ruff format`。
+  - `frontend/`：必须执行 `prettier` 格式化并确保无格式差异。
 - **冲突处理原则**：若不同工具间存在格式化冲突，Python 以 `ruff` 结果为准，前端以 `prettier` 结果为准。
+- **最新标准原则**: 编写代码时应优先遵循最新的 Python 3.13 语法和特性，避免使用过时或即将废弃的语法结构。
 
 ---
 
