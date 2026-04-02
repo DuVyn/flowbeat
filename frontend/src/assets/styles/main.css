@@ -1,0 +1,74 @@
+/**
+ * main.css — 全局样式重置与基础变量
+ *
+ * 消除浏览器默认样式差异，确保布局精确占满视口。
+ */
+
+/* ========================================
+ * Box-Sizing 重置
+ * ======================================== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ========================================
+ * 根元素 — 占满视口，禁止溢出滚动
+ * ======================================== */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  line-height: 1.5;
+}
+
+/* ========================================
+ * Vue 挂载根节点 — 同样占满视口
+ * ======================================== */
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+/* ========================================
+ * 图片默认行为
+ * ======================================== */
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* ========================================
+ * 链接与按钮重置
+ * ======================================== */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
