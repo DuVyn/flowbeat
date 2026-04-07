@@ -5,12 +5,15 @@ from inspect import isawaitable
 
 from fastapi import Depends, FastAPI
 from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api import api_router
 from app.core.cache import create_redis_client, get_redis_client
+from app.core.config import settings
 from app.core.storage import create_minio_client, get_minio_client
 from app.db.session import dispose_engine, get_db_session
 
@@ -28,6 +31,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_allow_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(api_router)
 
 
 @app.get("/health", tags=["health"])

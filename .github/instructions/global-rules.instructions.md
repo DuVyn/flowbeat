@@ -102,10 +102,10 @@ applyTo: "**/*"
 
 ### 3.5 脚本端依赖策略（scripts）
 
-- `scripts/` 使用“脚本内声明依赖”方式管理（inline script metadata）。
-- `scripts/` 不使用 `pyproject.toml` 作为该目录主依赖清单，也不要求维护 `uv.lock`。
-- 每个脚本应在文件头明确声明运行所需依赖与 Python 版本要求（Python 3.13）。
-- `scripts/.venv` 用于执行脚本任务，环境需与项目统一版本策略保持一致（3.13）。
+- `scripts/` 使用 `pyproject.toml` 管理依赖。
+- `scripts/` 必须使用 `uv.lock` 锁定依赖版本。
+- 涉及依赖变更时，必须同步更新 `pyproject.toml` 与 `uv.lock`，确保脚本执行环境可复现。
+- `scripts/.venv` 用于执行脚本任务，环境需与项目统一版本策略保持一致（Python 3.13）。
 
 ---
 

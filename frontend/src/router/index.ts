@@ -10,6 +10,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 
+import { useAuthStore } from '@/stores/auth'
+
 /* ================================================================
  * 布局组件
  * 通过懒加载引入，减少首屏体积
@@ -38,6 +40,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Home',
         component: () => import('@/views/home/HomePage.vue'),
         meta: { title: '首页', requiresAuth: true },
+      },
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/views/user/ProfilePage.vue'),
+        meta: { title: '个人中心', requiresAuth: true },
       },
       // TODO: 后续在此追加 category / search / player 等业务页面
     ],
@@ -96,15 +104,9 @@ router.beforeEach((to, _from) => {
   const title = to.meta.title as string | undefined
   document.title = title ? `${title} - FlowBeat` : 'FlowBeat'
 
-  /**
-   * 简易登录态判断
-   * TODO: 替换为 useAuthStore().isAuthenticated
-   *       示例：
-   *       const authStore = useAuthStore()
-   *       const isLoggedIn = authStore.isAuthenticated
-   */
-  const token = localStorage.getItem('flowbeat_token')
-  const isLoggedIn = !!token
+  const authStore = useAuthStore()
+  authStore.hydrateFromStorage()
+  const isLoggedIn = authStore.isAuthenticated
 
   // 目标路由需要登录，但用户未登录 → 跳转登录页，并记录原始目标路径
   if (to.meta.requiresAuth && !isLoggedIn) {

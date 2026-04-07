@@ -38,6 +38,8 @@ class User(Base):
     msno: Mapped[str] = mapped_column(
         String(128), unique=True, index=True, nullable=False
     )
+    # 用户昵称（必填，非唯一）。
+    nickname: Mapped[str] = mapped_column(String(255), nullable=False)
     # 邮箱（唯一登录标识）。
     email: Mapped[str] = mapped_column(
         String(255), unique=True, index=True, nullable=False

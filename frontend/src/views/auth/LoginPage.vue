@@ -4,16 +4,20 @@
  *
  * 功能：
  *   1. 「登录」与「注册」选项卡切换
- *   2. 登录表单：账号 + 密码
- *   3. 注册表单：用户名 + 邮箱 + 密码 + 确认密码
- *   4. 表单校验（前端基础校验）
- *   5. Mock 提交（后端 API 就绪后替换）
+ *   2. 登录表单：邮箱 + 密码
+ *   3. 注册表单：用户名 + 性别 + 生日（全下拉）+ 邮箱 + 密码
+ *   4. 与后端 Auth API 联调
  *
  * 与 AuthLayout 配合：本组件渲染在右侧表单区域内。
  */
 
 import { ref, reactive, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+
+import { HttpError } from '@/api/http'
+import { login, register } from '@/api/auth'
+import { useAuthStore } from '@/stores/auth'
+import type { GenderValue } from '@/types/auth'
 
 /* ---- 选项卡 ---- */
 type AuthTab = 'login' | 'register'
@@ -22,16 +26,21 @@ const activeTab = ref<AuthTab>('login')
 /* ---- 路由实例（提交后跳转用） ---- */
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
 
 /* ---- 登录表单 ---- */
 const loginForm = reactive({
-  account: '',   // 用户名或邮箱
+  email: '',
   password: '',
 })
 
 /* ---- 注册表单 ---- */
 const registerForm = reactive({
   username: '',
+  gender: 'unknown' as GenderValue,
+  birthYear: '',
+  birthMonth: '',
+  birthDay: '',
   email: '',
   password: '',
   confirmPassword: '',
@@ -45,6 +54,24 @@ const errorMessage = ref('')
 const showLoginPassword = ref(false)
 const showRegisterPassword = ref(false)
 const showRegisterConfirm = ref(false)
+
+const currentYear = new Date().getFullYear()
+const yearOptions = Array.from({ length: 100 }, (_, index) => String(currentYear - index))
+const monthOptions = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0'))
+
+const dayOptions = computed(() => {
+  const year = Number(registerForm.birthYear || currentYear)
+  const month = Number(registerForm.birthMonth || 1)
+  const daysInMonth = new Date(year, month, 0).getDate()
+  return Array.from({ length: daysInMonth }, (_, index) => String(index + 1).padStart(2, '0'))
+})
+
+const birthday = computed(() => {
+  if (!registerForm.birthYear || !registerForm.birthMonth || !registerForm.birthDay) {
+    return null
+  }
+  return `${registerForm.birthYear}-${registerForm.birthMonth}-${registerForm.birthDay}`
+})
 
 /* ---- 注册表单：密码匹配校验 ---- */
 const passwordMismatch = computed(() => {
@@ -60,18 +87,20 @@ function switchTab(tab: AuthTab) {
   errorMessage.value = ''
 }
 
-/**
- * 登录提交
- * TODO: 接入后端 API —— POST /api/auth/login
- */
 async function handleLogin() {
   errorMessage.value = ''
 
-  // 基础校验
-  if (!loginForm.account.trim()) {
-    errorMessage.value = '请输入用户名或邮箱'
+  if (!loginForm.email.trim()) {
+    errorMessage.value = '请输入邮箱'
     return
   }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(loginForm.email)) {
+    errorMessage.value = '邮箱格式不正确'
+    return
+  }
+
   if (!loginForm.password) {
     errorMessage.value = '请输入密码'
     return
@@ -79,45 +108,49 @@ async function handleLogin() {
 
   isSubmitting.value = true
   try {
-    // -------- Mock 登录逻辑 --------
-    // 模拟网络延迟
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const response = await login({
+      email: loginForm.email.trim(),
+      password: loginForm.password,
+    })
+    authStore.setAuthSession(response)
 
-    // 模拟登录成功：存储 Token
-    const mockToken = 'mock_jwt_token_' + Date.now()
-    localStorage.setItem('flowbeat_token', mockToken)
-
-    console.log('[Mock] 登录成功', { account: loginForm.account })
-
-    // 跳转到登录前的目标页，或默认首页
     const redirect = (route.query.redirect as string) || '/'
     await router.replace(redirect)
-    // -------- /Mock --------
-  } catch (err) {
-    errorMessage.value = '登录失败，请稍后重试'
-    console.error('[Mock] 登录异常', err)
+  } catch (error) {
+    if (error instanceof HttpError) {
+      errorMessage.value = error.detail
+    } else {
+      errorMessage.value = '登录失败，请稍后重试'
+    }
   } finally {
     isSubmitting.value = false
   }
 }
 
-/**
- * 注册提交
- * TODO: 接入后端 API —— POST /api/auth/register
- */
 async function handleRegister() {
   errorMessage.value = ''
 
-  // 基础校验
   if (!registerForm.username.trim()) {
     errorMessage.value = '请输入用户名'
     return
   }
+
+  if (!registerForm.gender) {
+    errorMessage.value = '请选择性别'
+    return
+  }
+
+  if (!birthday.value) {
+    errorMessage.value = '请选择完整生日'
+    return
+  }
+  const birthdayValue = birthday.value
+
   if (!registerForm.email.trim()) {
     errorMessage.value = '请输入邮箱'
     return
   }
-  // 简单邮箱格式校验
+
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailRegex.test(registerForm.email)) {
     errorMessage.value = '邮箱格式不正确'
@@ -134,26 +167,23 @@ async function handleRegister() {
 
   isSubmitting.value = true
   try {
-    // -------- Mock 注册逻辑 --------
-    await new Promise((resolve) => setTimeout(resolve, 1200))
-
-    console.log('[Mock] 注册成功', {
-      username: registerForm.username,
-      email: registerForm.email,
+    const response = await register({
+      username: registerForm.username.trim(),
+      gender: registerForm.gender,
+      birthday: birthdayValue,
+      email: registerForm.email.trim(),
+      password: registerForm.password,
     })
+    authStore.setAuthSession(response)
 
-    // 注册成功后自动切换到登录选项卡
-    loginForm.account = registerForm.username
-    loginForm.password = ''
-    activeTab.value = 'login'
-    errorMessage.value = ''
-
-    // 使用一个简单的成功提示（后续可替换为 Toast 组件）
-    alert('注册成功！请登录')
-    // -------- /Mock --------
-  } catch (err) {
-    errorMessage.value = '注册失败，请稍后重试'
-    console.error('[Mock] 注册异常', err)
+    const redirect = (route.query.redirect as string) || '/'
+    await router.replace(redirect)
+  } catch (error) {
+    if (error instanceof HttpError) {
+      errorMessage.value = error.detail
+    } else {
+      errorMessage.value = '注册失败，请稍后重试'
+    }
   } finally {
     isSubmitting.value = false
   }
@@ -201,21 +231,29 @@ async function handleRegister() {
         class="auth-card__form"
         @submit.prevent="handleLogin"
       >
-        <!-- 账号 -->
+        <!-- 邮箱 -->
         <div class="auth-card__field">
-          <label class="auth-card__label" for="login-account">用户名或邮箱</label>
+          <label class="auth-card__label" for="login-email">邮箱</label>
           <div class="auth-card__input-wrapper">
-            <svg class="auth-card__input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
+            <svg
+              class="auth-card__input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
+              />
+              <polyline points="22,6 12,13 2,6" />
             </svg>
             <input
-              id="login-account"
-              v-model="loginForm.account"
-              type="text"
+              id="login-email"
+              v-model="loginForm.email"
+              type="email"
               class="auth-card__input"
-              placeholder="请输入用户名或邮箱"
-              autocomplete="username"
+              placeholder="请输入邮箱"
+              autocomplete="email"
             />
           </div>
         </div>
@@ -224,9 +262,15 @@ async function handleRegister() {
         <div class="auth-card__field">
           <label class="auth-card__label" for="login-password">密码</label>
           <div class="auth-card__input-wrapper">
-            <svg class="auth-card__input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            <svg
+              class="auth-card__input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
             <input
               id="login-password"
@@ -244,44 +288,49 @@ async function handleRegister() {
               :aria-label="showLoginPassword ? '隐藏密码' : '显示密码'"
             >
               <!-- 眼睛图标 -->
-              <svg v-if="!showLoginPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
+              <svg
+                v-if="!showLoginPassword"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
               </svg>
               <!-- 闭眼图标 -->
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                <line x1="1" y1="1" x2="23" y2="23"/>
+                <path
+                  d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
+                />
+                <line x1="1" y1="1" x2="23" y2="23" />
               </svg>
             </button>
           </div>
         </div>
 
         <!-- 提交按钮 -->
-        <button
-          type="submit"
-          class="auth-card__submit"
-          :disabled="isSubmitting"
-        >
+        <button type="submit" class="auth-card__submit" :disabled="isSubmitting">
           <span v-if="isSubmitting" class="auth-card__spinner"></span>
           <span v-else>登 录</span>
         </button>
       </form>
 
       <!-- ==================== 注册表单 ==================== -->
-      <form
-        v-else
-        key="register"
-        class="auth-card__form"
-        @submit.prevent="handleRegister"
-      >
+      <form v-else key="register" class="auth-card__form" @submit.prevent="handleRegister">
         <!-- 用户名 -->
         <div class="auth-card__field">
           <label class="auth-card__label" for="reg-username">用户名</label>
           <div class="auth-card__input-wrapper">
-            <svg class="auth-card__input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
+            <svg
+              class="auth-card__input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
             </svg>
             <input
               id="reg-username"
@@ -298,9 +347,17 @@ async function handleRegister() {
         <div class="auth-card__field">
           <label class="auth-card__label" for="reg-email">邮箱</label>
           <div class="auth-card__input-wrapper">
-            <svg class="auth-card__input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-              <polyline points="22,6 12,13 2,6"/>
+            <svg
+              class="auth-card__input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
+              />
+              <polyline points="22,6 12,13 2,6" />
             </svg>
             <input
               id="reg-email"
@@ -313,13 +370,70 @@ async function handleRegister() {
           </div>
         </div>
 
+        <!-- 性别（下拉选择，禁止手动输入） -->
+        <div class="auth-card__field">
+          <label class="auth-card__label" for="reg-gender">性别</label>
+          <div class="auth-card__input-wrapper">
+            <svg
+              class="auth-card__input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M7 3h4v4" />
+              <path d="M10 14L21 3" />
+              <circle cx="7" cy="17" r="4" />
+            </svg>
+            <select id="reg-gender" v-model="registerForm.gender" class="auth-card__select">
+              <option value="male">男</option>
+              <option value="female">女</option>
+              <option value="unknown">不透露</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 生日（下拉选择，禁止手动输入） -->
+        <div class="auth-card__field">
+          <label class="auth-card__label">生日</label>
+          <div class="auth-card__birthday-row">
+            <select
+              v-model="registerForm.birthYear"
+              class="auth-card__select auth-card__select--birthday"
+            >
+              <option value="">年</option>
+              <option v-for="year in yearOptions" :key="year" :value="year">{{ year }}</option>
+            </select>
+            <select
+              v-model="registerForm.birthMonth"
+              class="auth-card__select auth-card__select--birthday"
+            >
+              <option value="">月</option>
+              <option v-for="month in monthOptions" :key="month" :value="month">{{ month }}</option>
+            </select>
+            <select
+              v-model="registerForm.birthDay"
+              class="auth-card__select auth-card__select--birthday"
+            >
+              <option value="">日</option>
+              <option v-for="day in dayOptions" :key="day" :value="day">{{ day }}</option>
+            </select>
+          </div>
+        </div>
+
         <!-- 密码 -->
         <div class="auth-card__field">
           <label class="auth-card__label" for="reg-password">密码</label>
           <div class="auth-card__input-wrapper">
-            <svg class="auth-card__input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            <svg
+              class="auth-card__input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
             <input
               id="reg-password"
@@ -335,13 +449,21 @@ async function handleRegister() {
               @click="showRegisterPassword = !showRegisterPassword"
               :aria-label="showRegisterPassword ? '隐藏密码' : '显示密码'"
             >
-              <svg v-if="!showRegisterPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
+              <svg
+                v-if="!showRegisterPassword"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
               </svg>
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                <line x1="1" y1="1" x2="23" y2="23"/>
+                <path
+                  d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
+                />
+                <line x1="1" y1="1" x2="23" y2="23" />
               </svg>
             </button>
           </div>
@@ -354,8 +476,14 @@ async function handleRegister() {
             class="auth-card__input-wrapper"
             :class="{ 'auth-card__input-wrapper--error': passwordMismatch }"
           >
-            <svg class="auth-card__input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <svg
+              class="auth-card__input-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
             <input
               id="reg-confirm"
@@ -371,21 +499,27 @@ async function handleRegister() {
               @click="showRegisterConfirm = !showRegisterConfirm"
               :aria-label="showRegisterConfirm ? '隐藏密码' : '显示密码'"
             >
-              <svg v-if="!showRegisterConfirm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
+              <svg
+                v-if="!showRegisterConfirm"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
               </svg>
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                <line x1="1" y1="1" x2="23" y2="23"/>
+                <path
+                  d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
+                />
+                <line x1="1" y1="1" x2="23" y2="23" />
               </svg>
             </button>
           </div>
           <!-- 密码不匹配提示 -->
           <Transition name="auth-fade">
-            <span v-if="passwordMismatch" class="auth-card__field-hint">
-              两次密码输入不一致
-            </span>
+            <span v-if="passwordMismatch" class="auth-card__field-hint"> 两次密码输入不一致 </span>
           </Transition>
         </div>
 
@@ -570,6 +704,37 @@ async function handleRegister() {
   color: rgba(0, 0, 0, 0.3);
 }
 
+.auth-card__select {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  padding: 0.8rem 0.75rem;
+  color: #1a2e1a;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+
+.auth-card__birthday-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.auth-card__select--birthday {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.auth-card__select--birthday:focus {
+  border-color: rgba(76, 175, 125, 0.6);
+  background: rgba(76, 175, 125, 0.04);
+  box-shadow: 0 0 0 3px rgba(76, 175, 125, 0.1);
+}
+
 /* 密码可见切换按钮 */
 .auth-card__input-toggle {
   flex-shrink: 0;
@@ -656,7 +821,9 @@ async function handleRegister() {
 }
 
 @keyframes auth-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ========================================

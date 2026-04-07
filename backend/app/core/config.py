@@ -42,6 +42,29 @@ class Settings(BaseSettings):
     redis_db: int = Field(default=0, validation_alias="REDIS_DB")
     redis_password: str | None = Field(default=None, validation_alias="REDIS_PASSWORD")
 
+    # Auth
+    auth_token_secret: str = Field(
+        default="flowbeat-dev-secret-change-me",
+        validation_alias="AUTH_TOKEN_SECRET",
+    )
+    auth_token_issuer: str = Field(
+        default="flowbeat-backend",
+        validation_alias="AUTH_TOKEN_ISSUER",
+    )
+    password_hash_iterations: int = Field(
+        default=390000,
+        validation_alias="PASSWORD_HASH_ITERATIONS",
+    )
+
+    # CORS
+    cors_allow_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ],
+        validation_alias="CORS_ALLOW_ORIGINS",
+    )
+
     @property
     def sqlalchemy_database_uri(self) -> str:
         """SQLAlchemy 异步连接串（用于应用与 Alembic）。"""

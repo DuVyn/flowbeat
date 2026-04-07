@@ -9,10 +9,23 @@
  *   3. 用户头像与个人中心入口（含下拉菜单）
  */
 
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { logout } from '@/api/auth'
+import { useAuthStore } from '@/stores/auth'
+
 const router = useRouter()
+const authStore = useAuthStore()
+authStore.hydrateFromStorage()
+
+const userAvatarText = computed(() => {
+  const username = authStore.user?.username?.trim()
+  if (!username) {
+    return 'U'
+  }
+  return username.slice(0, 1).toUpperCase()
+})
 
 /* ---- 搜索 ---- */
 const searchQuery = ref('')
@@ -24,8 +37,12 @@ function handleSearch() {
 }
 
 /* ---- 路由导航 ---- */
-function goBack() { router.back() }
-function goForward() { router.forward() }
+function goBack() {
+  router.back()
+}
+function goForward() {
+  router.forward()
+}
 
 /* ---- 用户下拉菜单 ---- */
 const showUserMenu = ref(false)
@@ -56,9 +73,14 @@ function goToProfile() {
 }
 
 /** 退出登录 */
-function handleLogout() {
+async function handleLogout() {
   showUserMenu.value = false
-  localStorage.removeItem('flowbeat_token')
+  try {
+    await logout()
+  } catch {
+    // 即使接口失败也要清理本地登录态，避免用户被卡住。
+  }
+  authStore.clearSession()
   router.replace('/auth/login')
 }
 </script>
@@ -68,12 +90,26 @@ function handleLogout() {
     <!-- 前进/后退 -->
     <div class="topbar__nav-buttons">
       <button class="topbar__nav-btn" @click="goBack" aria-label="后退">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <polyline points="15 18 9 12 15 6" />
         </svg>
       </button>
       <button class="topbar__nav-btn" @click="goForward" aria-label="前进">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <polyline points="9 18 15 12 9 6" />
         </svg>
       </button>
@@ -81,7 +117,15 @@ function handleLogout() {
 
     <!-- 搜索框 -->
     <div class="topbar__search">
-      <svg class="topbar__search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg
+        class="topbar__search-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
         <circle cx="11" cy="11" r="8" />
         <line x1="21" y1="21" x2="16.65" y2="16.65" />
       </svg>
@@ -97,25 +141,39 @@ function handleLogout() {
     <!-- 用户区域 -->
     <div ref="userMenuRef" class="topbar__user">
       <button class="topbar__avatar" aria-label="用户菜单" @click="toggleUserMenu">
-        <span class="topbar__avatar-text">U</span>
+        <span class="topbar__avatar-text">{{ userAvatarText }}</span>
       </button>
 
       <!-- 下拉菜单 -->
       <Transition name="topbar-dropdown">
         <div v-if="showUserMenu" class="topbar__dropdown">
           <button class="topbar__dropdown-item" @click="goToProfile">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
             </svg>
             <span>个人中心</span>
           </button>
           <div class="topbar__dropdown-divider"></div>
           <button class="topbar__dropdown-item topbar__dropdown-item--danger" @click="handleLogout">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
             <span>退出登录</span>
           </button>
@@ -136,11 +194,7 @@ function handleLogout() {
   padding: 0.875rem 1.5rem;
 
   /* 半透明白色背景 + 底部渐隐，与内容区融为一体 */
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.95) 60%,
-    transparent
-  );
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95) 60%, transparent);
 }
 
 /* ========================================
