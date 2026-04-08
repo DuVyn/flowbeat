@@ -11,6 +11,7 @@
  */
 
 import type { Track } from '@/types/music'
+import mockCover from '@/assets/images/mock-cover-sunny.png'
 import { formatDuration } from '@/utils/TimeFormat'
 
 const props = defineProps<{
@@ -27,6 +28,10 @@ const emit = defineEmits<{
 
 function handlePlay() {
   emit('play', props.track)
+}
+
+function resolveCoverUrl(rawUrl: string): string {
+  return rawUrl.trim() ? rawUrl : mockCover
 }
 </script>
 
@@ -45,17 +50,13 @@ function handlePlay() {
       <div class="music-list-item__cover-wrapper">
         <img
           class="music-list-item__cover"
-          :src="track.coverUrl"
+          :src="resolveCoverUrl(track.coverUrl)"
           :alt="`${track.album} 封面`"
           loading="lazy"
         />
         <!-- 悬停播放按钮 -->
         <div class="music-list-item__play-overlay">
-          <svg
-            class="music-list-item__play-icon"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
+          <svg class="music-list-item__play-icon" viewBox="0 0 24 24" fill="currentColor">
             <path d="M8 5v14l11-7z" />
           </svg>
         </div>
@@ -86,7 +87,9 @@ function handlePlay() {
   padding: 0.5rem 1rem;
   border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.15s ease;
+  transition:
+    background-color 0.2s ease,
+    transform 0.15s ease;
   user-select: none;
 }
 

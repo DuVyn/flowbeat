@@ -2,33 +2,43 @@
 /**
  * HomePage — 首页/推荐页
  *
- * 展示推荐音乐列表，当前使用 Mock 数据（20 首周杰伦《晴天》）。
+ * 展示后端返回的全局热门推荐列表。
  */
 
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import type { Track } from '@/types/music'
 import MusicList from '@/components/music/MusicList.vue'
-import mockCover from '@/assets/images/mock-cover-sunny.png'
+import { getHotRecommendations } from '@/api/recommendation'
+import { usePlayerStore } from '@/stores/player'
 
-/* ========================================
- * Mock 数据：生成 20 首《晴天》
- * ======================================== */
-function generateMockTracks(count: number): Track[] {
-  return Array.from({ length: count }, (_, i) => ({
-    id: `track-sunny-${i + 1}`,
-    name: '晴天',
-    artist: '周杰伦',
-    album: '叶惠美',
-    coverUrl: mockCover,
-    durationMs: 269000, // 4:29
-  }))
+const playerStore = usePlayerStore()
+
+const tracks = ref<Track[]>([])
+const loading = ref(true)
+const loadError = ref('')
+
+async function loadHotRecommendations() {
+  loading.value = true
+  loadError.value = ''
+
+  try {
+    const response = await getHotRecommendations(20, 0)
+    tracks.value = response.items
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : '推荐加载失败，请稍后重试'
+    tracks.value = []
+  } finally {
+    loading.value = false
+  }
 }
-
-const tracks = ref<Track[]>(generateMockTracks(20))
 
 function handlePlay(track: Track) {
-  console.log('▶ 播放:', track.name, '-', track.artist)
+  void playerStore.playTrack(track, tracks.value)
 }
+
+onMounted(() => {
+  void loadHotRecommendations()
+})
 </script>
 
 <template>
@@ -36,15 +46,16 @@ function handlePlay(track: Track) {
     <!-- 页面头部 -->
     <header class="home-page__hero">
       <h1 class="home-page__greeting">下午好 🎵</h1>
-      <p class="home-page__subtitle">为你推荐今日精选音乐</p>
+      <p class="home-page__subtitle">为你推荐全站热门歌曲</p>
     </header>
 
+    <div v-if="loadError" class="home-page__error">
+      <span>{{ loadError }}</span>
+      <button class="home-page__retry" @click="loadHotRecommendations">重试</button>
+    </div>
+
     <!-- 推荐歌曲列表 -->
-    <MusicList
-      title="今日推荐"
-      :tracks="tracks"
-      @play="handlePlay"
-    />
+    <MusicList title="今日推荐" :tracks="tracks" :loading="loading" @play="handlePlay" />
   </div>
 </template>
 
@@ -74,5 +85,28 @@ function handlePlay(track: Track) {
   color: rgba(0, 0, 0, 0.45);
   margin: 0;
   font-size: 0.9rem;
+}
+
+.home-page__error {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(209, 77, 77, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 230, 230, 0.5);
+  color: #8a2b2b;
+  font-size: 0.85rem;
+}
+
+.home-page__retry {
+  border: none;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  background: #1a2e1a;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.78rem;
 }
 </style>
