@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
+import { recordPlayHistory } from '@/api/history'
 import { getSongStream } from '@/api/song'
 import type { Track } from '@/types/music'
 
@@ -92,6 +93,9 @@ export const usePlayerStore = defineStore('player', () => {
       duration.value = track.durationMs > 0 ? track.durationMs / 1000 : 0
       currentTime.value = 0
       await player.play()
+
+      // 历史上报失败不应影响主播放流程。
+      void recordPlayHistory(track.id).catch(() => undefined)
     } catch (error) {
       // 浏览器在快速切歌时可能主动中断前一个 play Promise，此类中断可忽略。
       if (error instanceof DOMException && error.name === 'AbortError') {

@@ -7,18 +7,14 @@
  *   2. 主导航菜单（首页、个性推荐、历史播放等）
  *   3. 后续可扩展：用户歌单列表、收藏夹等
  *
- * 当前路由自动高亮对应导航项（通过 RouterLink 的 active 状态）。
+ * 当前路由自动高亮对应导航项（通过 RouterLink 的 exact-active 状态）。
  */
-
-import { useRoute } from 'vue-router'
-
-const route = useRoute()
 
 /* ---- 导航菜单配置 ---- */
 interface NavItem {
-  name: string       // 显示文字
-  icon: string       // SVG path（使用 24x24 viewBox）
-  to: string         // 路由路径
+  name: string // 显示文字
+  icon: string // SVG path（使用 24x24 viewBox）
+  to: string // 路由路径
 }
 
 const navItems: NavItem[] = [
@@ -66,7 +62,7 @@ const myMusicItems: NavItem[] = [
       <div class="sidebar__brand-icon">
         <!-- 音符图标 -->
         <svg viewBox="0 0 24 24" fill="currentColor">
-          <path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/>
+          <path d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
         </svg>
       </div>
       <span class="sidebar__brand-name">FlowBeat</span>
@@ -80,9 +76,17 @@ const myMusicItems: NavItem[] = [
           <RouterLink
             :to="item.to"
             class="sidebar__nav-link"
-            active-class="sidebar__nav-link--active"
+            exact-active-class="sidebar__nav-link--active"
           >
-            <svg class="sidebar__nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg
+              class="sidebar__nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <path :d="item.icon" />
             </svg>
             <span>{{ item.name }}</span>
@@ -102,9 +106,17 @@ const myMusicItems: NavItem[] = [
           <RouterLink
             :to="item.to"
             class="sidebar__nav-link"
-            active-class="sidebar__nav-link--active"
+            exact-active-class="sidebar__nav-link--active"
           >
-            <svg class="sidebar__nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg
+              class="sidebar__nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <path :d="item.icon" />
             </svg>
             <span>{{ item.name }}</span>
@@ -130,7 +142,9 @@ const myMusicItems: NavItem[] = [
 
   /* 隐藏滚动条 */
   scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* ========================================

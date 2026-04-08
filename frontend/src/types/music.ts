@@ -72,6 +72,42 @@ export interface SongStreamResponse {
   strategy: 'minio_presigned_url'
 }
 
+/** 记录播放历史请求 DTO */
+export interface RecordPlayHistoryRequestDto {
+  song_id: number
+}
+
+/** 记录播放历史响应 DTO */
+export interface RecordPlayHistoryResponseDto {
+  detail: string
+}
+
+/** 播放历史单条 DTO */
+export interface PlayHistoryItemDto extends TrackDto {
+  played_at: string
+}
+
+/** 播放历史分页响应 DTO */
+export interface PlayHistoryResponseDto {
+  limit: number
+  offset: number
+  has_more: boolean
+  items: PlayHistoryItemDto[]
+}
+
+/** 前端可直接使用的播放历史单条 */
+export interface PlayHistoryItem extends Track {
+  playedAt: string
+}
+
+/** 前端可直接使用的播放历史分页响应 */
+export interface PlayHistoryResponse {
+  limit: number
+  offset: number
+  hasMore: boolean
+  items: PlayHistoryItem[]
+}
+
 /** 歌单 / 播放列表 */
 export interface Playlist {
   /** 歌单唯一标识 */

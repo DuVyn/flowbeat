@@ -3,6 +3,10 @@
 from app.schemas.auth import AuthResponse, LoginRequest, LogoutResponse, RegisterRequest
 from app.schemas.music import (
     HotRecommendationsResponse,
+    PlayHistoryItemResponse,
+    PlayHistoryResponse,
+    RecordPlayHistoryRequest,
+    RecordPlayHistoryResponse,
     SongDetailResponse,
     SongStreamResponse,
     TrackResponse,
@@ -18,6 +22,10 @@ __all__ = [
     "SongDetailResponse",
     "SongStreamResponse",
     "HotRecommendationsResponse",
+    "RecordPlayHistoryRequest",
+    "RecordPlayHistoryResponse",
+    "PlayHistoryItemResponse",
+    "PlayHistoryResponse",
     "UserProfileResponse",
     "UpdateUserProfileRequest",
 ]
