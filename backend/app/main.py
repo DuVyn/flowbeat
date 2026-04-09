@@ -1,9 +1,10 @@
 """FastAPI 应用入口。"""
 
+import asyncio
 from contextlib import asynccontextmanager
 from inspect import isawaitable
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -39,6 +40,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def handle_cancelled_request(request: Request, call_next):
+    """开发期 Ctrl+C 触发关闭时，避免取消请求输出整段异常栈。"""
+    try:
+        return await call_next(request)
+    except asyncio.CancelledError:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "服务正在关闭，请稍后重试"},
+        )
+
 
 app.include_router(api_router)
 

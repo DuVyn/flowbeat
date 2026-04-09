@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+RecommendationStrategy = Literal["two_tower", "content_cold_start", "global_hot"]
+
 
 class TrackResponse(BaseModel):
     """前端音乐列表统一曲目结构。"""
@@ -42,6 +44,18 @@ class HotRecommendationsResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     strategy: Literal["global_hot"] = "global_hot"
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+    total: int = Field(ge=0)
+    items: list[TrackResponse]
+
+
+class PersonalizedRecommendationsResponse(BaseModel):
+    """个性化推荐分页响应。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    strategy: RecommendationStrategy
     limit: int = Field(ge=1)
     offset: int = Field(ge=0)
     total: int = Field(ge=0)

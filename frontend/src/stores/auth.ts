@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia'
 
 import type { AuthResponse, UserProfile } from '@/types/auth'
-import { clearAuthSession, persistAuthSession, readStoredTokens } from '@/api/http'
+import {
+  clearAuthSession,
+  isAccessTokenExpired,
+  persistAuthSession,
+  readStoredTokens,
+} from '@/api/http'
 
 interface AuthState {
   accessToken: string | null
@@ -23,6 +28,12 @@ export const useAuthStore = defineStore('auth', {
   actions: {
     hydrateFromStorage() {
       const { accessToken, refreshToken } = readStoredTokens()
+
+      if (!accessToken || isAccessTokenExpired(accessToken)) {
+        this.clearSession()
+        return
+      }
+
       this.accessToken = accessToken
       this.refreshToken = refreshToken
     },

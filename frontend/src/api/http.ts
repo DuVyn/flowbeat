@@ -4,6 +4,10 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 const ACCESS_TOKEN_KEY = 'flowbeat_access_token'
 const REFRESH_TOKEN_KEY = 'flowbeat_refresh_token'
 
+interface TokenPayload {
+  exp?: unknown
+}
+
 export class HttpError extends Error {
   status: number
   detail: string
@@ -85,5 +89,37 @@ export function readStoredTokens(): { accessToken: string | null; refreshToken: 
   return {
     accessToken: localStorage.getItem(ACCESS_TOKEN_KEY),
     refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY),
+  }
+}
+
+function decodeBase64Url(value: string): string {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
+  const padding = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4))
+  return atob(`${normalized}${padding}`)
+}
+
+/**
+ * 仅用于前端快速判断 access token 是否过期。
+ * 注意：该函数不做签名校验，不能替代后端鉴权。
+ */
+export function isAccessTokenExpired(token: string): boolean {
+  try {
+    const [payloadBase64] = token.split('.', 1)
+    if (!payloadBase64) {
+      return true
+    }
+
+    const payloadText = decodeBase64Url(payloadBase64)
+    const payload = JSON.parse(payloadText) as TokenPayload
+    const exp = Number(payload.exp)
+
+    if (!Number.isFinite(exp)) {
+      return true
+    }
+
+    const now = Math.floor(Date.now() / 1000)
+    return exp <= now
+  } catch {
+    return true
   }
 }

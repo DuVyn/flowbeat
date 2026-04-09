@@ -32,6 +32,9 @@ export interface TrackDto {
   duration_ms: number
 }
 
+/** 推荐来源策略 */
+export type RecommendationStrategy = 'two_tower' | 'content_cold_start' | 'global_hot'
+
 /** 热门推荐分页响应 DTO */
 export interface HotRecommendationsResponseDto {
   strategy: 'global_hot'
@@ -44,6 +47,24 @@ export interface HotRecommendationsResponseDto {
 /** 前端可直接使用的热门推荐响应 */
 export interface HotRecommendationsResponse {
   strategy: 'global_hot'
+  limit: number
+  offset: number
+  total: number
+  items: Track[]
+}
+
+/** 个性化推荐分页响应 DTO */
+export interface PersonalizedRecommendationsResponseDto {
+  strategy: RecommendationStrategy
+  limit: number
+  offset: number
+  total: number
+  items: TrackDto[]
+}
+
+/** 前端可直接使用的个性化推荐响应 */
+export interface PersonalizedRecommendationsResponse {
+  strategy: RecommendationStrategy
   limit: number
   offset: number
   total: number

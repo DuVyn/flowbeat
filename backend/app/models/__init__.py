@@ -4,6 +4,7 @@ from app.models.associations import (
     song_composer_m2m,
     song_genre_m2m,
     song_lyricist_m2m,
+    user_genre_preference_m2m,
 )
 from app.models.play_count import PlayCount
 from app.models.play_history import PlayHistory
@@ -25,4 +26,5 @@ __all__ = [
     "song_genre_m2m",
     "song_composer_m2m",
     "song_lyricist_m2m",
+    "user_genre_preference_m2m",
 ]

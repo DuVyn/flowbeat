@@ -25,6 +25,24 @@ song_genre_m2m = Table(
     ),
 )
 
+# 用户 <-> 偏好流派
+user_genre_preference_m2m = Table(
+    "user_genre_preference_m2m",
+    Base.metadata,
+    Column(
+        "user_id",
+        BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "genre_id",
+        BigInteger,
+        ForeignKey("genres.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
 # 歌曲 <-> 作曲家
 song_composer_m2m = Table(
     "song_composer_m2m",

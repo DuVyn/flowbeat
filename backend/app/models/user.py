@@ -15,9 +15,11 @@ from sqlalchemy import BigInteger, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.associations import user_genre_preference_m2m
 
 if TYPE_CHECKING:
     from app.models.play_history import PlayHistory
+    from app.models.song_meta import Genre
     from app.models.user_session import UserSession
 
 
@@ -64,4 +66,10 @@ class User(Base):
     # 用户播放历史，一对多关系，用于历史播放页面查询。
     play_histories: Mapped[List["PlayHistory"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", lazy="selectin"
+    )
+    # 用户偏好流派，多对多关系，用于冷启动与推荐降级策略。
+    preferred_genres: Mapped[List["Genre"]] = relationship(
+        secondary=user_genre_preference_m2m,
+        back_populates="preferred_by_users",
+        lazy="selectin",
     )

@@ -2,6 +2,8 @@ import { requestJson } from '@/api/http'
 import type {
   HotRecommendationsResponse,
   HotRecommendationsResponseDto,
+  PersonalizedRecommendationsResponse,
+  PersonalizedRecommendationsResponseDto,
   Track,
   TrackDto,
 } from '@/types/music'
@@ -27,6 +29,31 @@ export async function getHotRecommendations(
   })
   const dto = await requestJson<HotRecommendationsResponseDto>(
     `/api/recommendations/hot?${params.toString()}`,
+    {
+      method: 'GET',
+    },
+  )
+
+  return {
+    strategy: dto.strategy,
+    limit: dto.limit,
+    offset: dto.offset,
+    total: dto.total,
+    items: dto.items.map(mapTrackDto),
+  }
+}
+
+export async function getPersonalizedRecommendations(
+  limit = 20,
+  offset = 0,
+): Promise<PersonalizedRecommendationsResponse> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  })
+
+  const dto = await requestJson<PersonalizedRecommendationsResponseDto>(
+    `/api/recommendations/personalized?${params.toString()}`,
     {
       method: 'GET',
     },

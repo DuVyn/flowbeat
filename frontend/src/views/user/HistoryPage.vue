@@ -6,15 +6,21 @@
  */
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { getPlayHistory } from '@/api/history'
+import { HttpError } from '@/api/http'
 import MusicList from '@/components/music/MusicList.vue'
+import { useAuthStore } from '@/stores/auth'
 import { usePlayerStore } from '@/stores/player'
 import type { PlayHistoryItem, Track } from '@/types/music'
 
 const PAGE_SIZE = 20
 const BOTTOM_THRESHOLD_PX = 120
 
+const router = useRouter()
+const route = useRoute()
+const authStore = useAuthStore()
 const playerStore = usePlayerStore()
 
 const tracks = ref<PlayHistoryItem[]>([])
@@ -59,7 +65,20 @@ async function loadHistory(reset = false): Promise<void> {
     tracks.value = reset ? response.items : [...tracks.value, ...response.items]
     loadError.value = ''
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : '历史播放加载失败，请稍后重试'
+    if (error instanceof HttpError && error.status === 401) {
+      authStore.clearSession()
+      await router.replace({
+        name: 'Login',
+        query: { redirect: route.fullPath },
+      })
+      return
+    }
+
+    if (error instanceof TypeError && /fetch/i.test(error.message)) {
+      loadError.value = '网络请求失败，请检查后端服务后重试'
+    } else {
+      loadError.value = error instanceof Error ? error.message : '历史播放加载失败，请稍后重试'
+    }
     if (reset) {
       tracks.value = []
       hasMore.value = false
@@ -136,7 +155,13 @@ onBeforeUnmount(() => {
 
     <div v-if="loadError" class="history-page__error">
       <span>{{ loadError }}</span>
-      <button class="history-page__retry" @click="loadHistory(true)">重试</button>
+      <button
+        class="history-page__retry"
+        :disabled="loading || loadingMore"
+        @click="loadHistory(true)"
+      >
+        {{ loading ? '重试中...' : '重试' }}
+      </button>
     </div>
 
     <MusicList title="最近播放" :tracks="tracks" :loading="loading" @play="handlePlay" />
@@ -207,6 +232,11 @@ onBeforeUnmount(() => {
   color: #fff;
   cursor: pointer;
   font-size: 0.78rem;
+}
+
+.history-page__retry:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
 }
 
 .history-page__auto-loading,

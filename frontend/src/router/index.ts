@@ -42,6 +42,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '首页', requiresAuth: true },
       },
       {
+        path: 'recommend',
+        name: 'Recommend',
+        component: () => import('@/views/home/RecommendPage.vue'),
+        meta: { title: '个性推荐', requiresAuth: true },
+      },
+      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@/views/user/ProfilePage.vue'),

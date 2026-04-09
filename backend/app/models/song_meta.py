@@ -6,10 +6,16 @@
 - lyricist -> Lyricist
 """
 
+from typing import TYPE_CHECKING, List
+
 from sqlalchemy import BigInteger, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.associations import user_genre_preference_m2m
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class Genre(Base):
@@ -21,6 +27,12 @@ class Genre(Base):
     # 对应 songs.csv 中的单个 genre_id 编码。
     genre_code: Mapped[str] = mapped_column(
         String(32), unique=True, index=True, nullable=False
+    )
+    # 偏好该流派的用户集合，用于内容冷启动与推荐降级。
+    preferred_by_users: Mapped[List["User"]] = relationship(
+        secondary=user_genre_preference_m2m,
+        back_populates="preferred_genres",
+        lazy="selectin",
     )
 
 

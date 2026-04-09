@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from fastapi.concurrency import run_in_threadpool
 from minio import Minio
 from minio.error import S3Error
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -15,16 +16,23 @@ from app.models.song import Song
 from app.schemas.music import SongDetailResponse, SongStreamResponse, TrackResponse
 
 
-def build_track_response(song: Song) -> TrackResponse:
-    """将 Song ORM 对象映射为前端 Track 结构。"""
+def build_track_response(
+    *,
+    song_pk: int,
+    song_id: str,
+    name: str | None,
+    artist_name: str | None,
+    song_length: int | None,
+) -> TrackResponse:
+    """将歌曲基础字段映射为前端 Track 结构。"""
     return TrackResponse(
-        id=song.id,
-        song_id=song.song_id,
-        name=song.name or song.song_id,
-        artist=song.artist_name or "未知艺术家",
+        id=song_pk,
+        song_id=song_id,
+        name=name or song_id,
+        artist=artist_name or "未知艺术家",
         album="未知专辑",
         cover_url="",
-        duration_ms=song.song_length or 0,
+        duration_ms=song_length or 0,
     )
 
 
@@ -37,29 +45,47 @@ class SongService:
 
     async def get_song_detail(self, song_id: int) -> SongDetailResponse:
         """根据歌曲主键获取详情。"""
-        song = await self.db.get(Song, song_id)
-        if song is None:
+        detail_stmt = select(
+            Song.id,
+            Song.song_id,
+            Song.name,
+            Song.artist_name,
+            Song.song_length,
+            Song.language,
+            Song.audio_object_key,
+        ).where(Song.id == song_id)
+        row = (await self.db.execute(detail_stmt)).first()
+
+        if row is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="歌曲不存在",
             )
 
-        base_track = build_track_response(song)
+        base_track = build_track_response(
+            song_pk=int(row.id),
+            song_id=str(row.song_id),
+            name=row.name,
+            artist_name=row.artist_name,
+            song_length=row.song_length,
+        )
         return SongDetailResponse(
             **base_track.model_dump(),
-            language=song.language,
-            audio_object_key=song.audio_object_key,
+            language=row.language,
+            audio_object_key=row.audio_object_key,
         )
 
     async def get_song_stream(self, song_id: int) -> SongStreamResponse:
         """签发 MinIO 预签名播放地址。"""
-        song = await self.db.get(Song, song_id)
-        if song is None:
+        stream_stmt = select(Song.id, Song.audio_object_key).where(Song.id == song_id)
+        row = (await self.db.execute(stream_stmt)).first()
+
+        if row is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="歌曲不存在",
             )
-        if not song.audio_object_key:
+        if not row.audio_object_key:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="该歌曲暂无可播放音频",
@@ -74,12 +100,12 @@ class SongService:
             await run_in_threadpool(
                 self.minio_client.stat_object,
                 settings.minio_song_bucket,
-                song.audio_object_key,
+                row.audio_object_key,
             )
             stream_url = await run_in_threadpool(
                 self.minio_client.presigned_get_object,
                 settings.minio_song_bucket,
-                song.audio_object_key,
+                row.audio_object_key,
                 expires=timedelta(seconds=settings.minio_presign_expires_seconds),
             )
         except S3Error as exc:
@@ -94,7 +120,7 @@ class SongService:
             ) from exc
 
         return SongStreamResponse(
-            song_id=song.id,
+            song_id=int(row.id),
             stream_url=stream_url,
             expires_in_seconds=settings.minio_presign_expires_seconds,
         )

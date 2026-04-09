@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import settings
 
-
 engine = create_async_engine(
     settings.sqlalchemy_database_uri,
     pool_pre_ping=True,
@@ -24,7 +23,8 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
         try:
             yield session
-        except Exception:
+        except BaseException:
+            # 请求被取消（例如开发期 Ctrl+C）时也要回滚，避免连接留有未完成事务。
             await session.rollback()
             raise
 
