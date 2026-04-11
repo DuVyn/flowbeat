@@ -26,6 +26,10 @@ async def lifespan(app: FastAPI):
     app.state.redis_client = create_redis_client()
     try:
         yield
+    except asyncio.CancelledError:
+        # 开发模式（尤其 --reload）下 Ctrl+C 可能直接取消 lifespan 等待，
+        # 该异常属于关闭流程噪声，不应作为错误栈输出。
+        return
     finally:
         await app.state.redis_client.aclose()
         await dispose_engine()

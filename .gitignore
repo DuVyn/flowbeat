@@ -36,9 +36,7 @@ docs/
 # =========================
 # 推荐系统生成产物
 # =========================
-recsys/artifacts/content_based/
-recsys/checkpoints/*
-!recsys/checkpoints/PLACEHOLDER.txt
+recsys/artifacts/*
 
 # =========================
 # 操作系统生成文件

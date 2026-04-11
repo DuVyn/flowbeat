@@ -1,4 +1,11 @@
-"""占位模块。
+"""Two-Tower 推理模块。"""
 
-用于固定目录结构，当前阶段仅完成工程分层，不包含业务实现代码。
-"""
+from .rank_scoring import (
+    TwoTowerRankingSummary,
+    build_two_tower_topk_from_embeddings,
+)
+
+__all__ = [
+    "TwoTowerRankingSummary",
+    "build_two_tower_topk_from_embeddings",
+]

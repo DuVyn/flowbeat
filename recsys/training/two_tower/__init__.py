@@ -1,4 +1,17 @@
-"""占位模块。
+"""Two-Tower 训练准备模块导出。"""
 
-用于固定目录结构，当前阶段仅完成工程分层，不包含业务实现代码。
-"""
+from training.two_tower.run_context import (
+    TwoTowerRunContextSummary,
+    prepare_two_tower_run_context,
+)
+from training.two_tower.train_local_mvp import (
+    TwoTowerTrainingSummary,
+    train_two_tower_local_mvp,
+)
+
+__all__ = [
+    "TwoTowerRunContextSummary",
+    "TwoTowerTrainingSummary",
+    "prepare_two_tower_run_context",
+    "train_two_tower_local_mvp",
+]

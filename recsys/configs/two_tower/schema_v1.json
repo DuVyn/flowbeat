@@ -1,0 +1,63 @@
+{
+  "schema_version": "two_tower_data_contract_v1",
+  "required_columns": {
+    "users_csv": ["msno", "gender", "bd"],
+    "songs_csv": ["song_id", "artist_name", "song_length", "language"],
+    "play_histories_csv": [
+      "msno",
+      "song_id",
+      "target",
+      "played_at",
+      "created_at"
+    ],
+    "play_counts_csv": ["song_id", "total_play_count"],
+    "user_preference_csv": ["msno", "genre_code"],
+    "song_genre_csv": ["song_id", "genre_code"]
+  },
+  "field_dictionary": {
+    "users_csv": {
+      "msno": "用户业务主键，来自 KKBox 会员唯一标识。",
+      "gender": "用户性别，缺失按 unknown 处理。",
+      "bd": "用户年龄，<=0 视作未知。"
+    },
+    "songs_csv": {
+      "song_id": "歌曲业务主键，需与 backend.songs.song_id 对齐。",
+      "artist_name": "艺术家名称，用于画像与可解释性。",
+      "song_length": "歌曲时长（毫秒）。",
+      "language": "语言编码。"
+    },
+    "play_histories_csv": {
+      "msno": "用户业务主键。",
+      "song_id": "歌曲业务主键。",
+      "target": "正样本标记，>= 阈值视为正反馈。",
+      "played_at": "播放时间，用于时间切分。",
+      "created_at": "兜底时间字段。"
+    },
+    "play_counts_csv": {
+      "song_id": "歌曲业务主键。",
+      "total_play_count": "全站聚合播放次数。"
+    },
+    "user_preference_csv": {
+      "msno": "用户业务主键。",
+      "genre_code": "注册偏好流派编码。"
+    },
+    "song_genre_csv": {
+      "song_id": "歌曲业务主键。",
+      "genre_code": "歌曲流派编码。"
+    }
+  },
+  "id_mapping": {
+    "user_feature_key": "msno",
+    "song_feature_key": "song_id",
+    "backend_song_lookup_key": "song_id",
+    "backend_user_lookup_flow": "recsys(msno) -> backend.users(msno -> id)"
+  },
+  "missing_value_policy": {
+    "target": "缺失按 0 处理并过滤出正样本。",
+    "played_at": "缺失时回退 created_at，仍缺失则丢弃。",
+    "gender": "缺失填充 unknown。",
+    "bd": "<=0 视为未知年龄。",
+    "song_length": "缺失填充 0。",
+    "language": "缺失填充 unknown。"
+  }
+}

@@ -23,17 +23,23 @@ from app.schemas.music import (
 class RecommendationService:
     """推荐读取与降级服务。"""
 
-    _PERSONALIZED_KEY_VERSION = 1
+    _TWO_TOWER_KEY_VERSION = 2
+    _CONTENT_KEY_VERSION = 1
 
     @classmethod
     def _build_two_tower_key(cls, user_id: int) -> str:
         """主策略 key：双塔结果。"""
-        return f"rec:user:{user_id}:v{cls._PERSONALIZED_KEY_VERSION}"
+        return f"rec:user:{user_id}:v{cls._TWO_TOWER_KEY_VERSION}"
 
     @classmethod
     def _build_content_fallback_key(cls, user_id: int) -> str:
         """冷启动策略 key：内容推荐结果。"""
-        return f"rec:user:{user_id}:content:v{cls._PERSONALIZED_KEY_VERSION}"
+        return f"rec:user:{user_id}:v{cls._CONTENT_KEY_VERSION}"
+
+    @classmethod
+    def _build_legacy_content_fallback_key(cls, user_id: int) -> str:
+        """兼容早期实现的内容推荐 key。"""
+        return f"rec:user:{user_id}:content:v{cls._CONTENT_KEY_VERSION}"
 
     def __init__(self, db: AsyncSession, redis_client: Redis):
         self.db = db
@@ -286,9 +292,14 @@ class RecommendationService:
                 if content_response is not None:
                     return content_response
 
-        content_key = self._build_content_fallback_key(user_id)
-        content_payload = await self._get_payload_by_key(cache_key=content_key)
-        if content_payload is not None:
+        for content_key in (
+            self._build_content_fallback_key(user_id),
+            self._build_legacy_content_fallback_key(user_id),
+        ):
+            content_payload = await self._get_payload_by_key(cache_key=content_key)
+            if content_payload is None:
+                continue
+
             content_response = await self._build_personalized_response_from_payload(
                 payload=content_payload,
                 strategy="content_cold_start",

@@ -1,4 +1,8 @@
-"""占位模块。
+"""Two-Tower 特征工程模块导出。"""
 
-用于固定目录结构，当前阶段仅完成工程分层，不包含业务实现代码。
-"""
+from features.two_tower.build_features import (
+    TwoTowerFeaturesSummary,
+    build_two_tower_features,
+)
+
+__all__ = ["TwoTowerFeaturesSummary", "build_two_tower_features"]

@@ -1,4 +1,5 @@
-"""占位模块。
+"""Two-Tower 模型模块导出。"""
 
-用于固定目录结构，当前阶段仅完成工程分层，不包含业务实现代码。
-"""
+from models.two_tower.model import TwoTowerModel
+
+__all__ = ["TwoTowerModel"]
