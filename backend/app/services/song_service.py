@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.song import Song
 from app.schemas.music import SongDetailResponse, SongStreamResponse, TrackResponse
+from app.services.track_mapper import to_track_response
 
 
 def build_track_response(
@@ -24,15 +25,13 @@ def build_track_response(
     artist_name: str | None,
     song_length: int | None,
 ) -> TrackResponse:
-    """将歌曲基础字段映射为前端 Track 结构。"""
-    return TrackResponse(
-        id=song_pk,
+    """兼容旧调用入口，实际映射委托给共享 mapper。"""
+    return to_track_response(
+        song_pk=song_pk,
         song_id=song_id,
-        name=name or song_id,
-        artist=artist_name or "未知艺术家",
-        album="未知专辑",
-        cover_url="",
-        duration_ms=song_length or 0,
+        name=name,
+        artist_name=artist_name,
+        song_length=song_length,
     )
 
 
@@ -97,11 +96,6 @@ class SongService:
             )
 
         try:
-            await run_in_threadpool(
-                self.minio_client.stat_object,
-                settings.minio_song_bucket,
-                row.audio_object_key,
-            )
             stream_url = await run_in_threadpool(
                 self.minio_client.presigned_get_object,
                 settings.minio_song_bucket,
@@ -117,6 +111,11 @@ class SongService:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="音频服务暂不可用，请稍后重试",
+            ) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="音频服务网络异常，请稍后重试",
             ) from exc
 
         return SongStreamResponse(

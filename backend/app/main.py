@@ -1,6 +1,7 @@
 """FastAPI 应用入口。"""
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from inspect import isawaitable
 
@@ -18,6 +19,8 @@ from app.core.config import settings
 from app.core.storage import create_minio_client, get_minio_client
 from app.db.session import dispose_engine, get_db_session
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,8 +34,17 @@ async def lifespan(app: FastAPI):
         # 该异常属于关闭流程噪声，不应作为错误栈输出。
         return
     finally:
-        await app.state.redis_client.aclose()
-        await dispose_engine()
+        redis_client = getattr(app.state, "redis_client", None)
+        if redis_client is not None:
+            try:
+                await redis_client.aclose()
+            except Exception:
+                logger.exception("Redis 客户端关闭失败")
+
+        try:
+            await dispose_engine()
+        except Exception:
+            logger.exception("数据库连接池释放失败")
 
 
 app = FastAPI(lifespan=lifespan)

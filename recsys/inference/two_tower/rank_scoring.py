@@ -1,9 +1,10 @@
-"""Two-Tower P6：基于 embedding 生成每用户 TopK 推荐。"""
+"""双塔排序模块：基于导出的向量生成用户 TopK 推荐。"""
 
 from __future__ import annotations
 
 import json
 import math
+import warnings
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,7 +14,7 @@ import torch
 
 @dataclass(slots=True)
 class TwoTowerRankingSummary:
-    """P6 排序构建摘要。"""
+    """单次推理执行的排序摘要。"""
 
     total_users: int
     users_with_ranked_items: int
@@ -21,6 +22,7 @@ class TwoTowerRankingSummary:
     unique_recommended_songs: int
     top_k_items: int
     score_batch_size: int
+    item_block_size: int
     device: str
     output_path: str
     meta_path: str
@@ -36,18 +38,51 @@ def _iter_jsonl(path: Path):
 
 
 def _to_int(value: object, default: int = 0) -> int:
-    try:
+    if isinstance(value, bool):
         return int(value)
-    except (TypeError, ValueError):
-        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return default
+        try:
+            return int(text)
+        except ValueError:
+            return default
+    return default
 
 
 def _resolve_device(device: str | None) -> torch.device:
-    if device is None or device == "auto":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if device == "cuda" and not torch.cuda.is_available():
+    normalized = (device or "auto").strip().lower()
+    has_mps = bool(
+        getattr(torch.backends, "mps", None)
+        and torch.backends.mps.is_available()
+        and torch.backends.mps.is_built()
+    )
+
+    if normalized == "auto":
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        if has_mps:
+            return torch.device("mps")
         return torch.device("cpu")
-    return torch.device(device)
+
+    if normalized == "cuda":
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        warnings.warn("请求了 CUDA 但不可用，已回退到 CPU。", stacklevel=2)
+        return torch.device("cpu")
+
+    if normalized == "mps":
+        if has_mps:
+            return torch.device("mps")
+        warnings.warn("请求了 MPS 但不可用，已回退到 CPU。", stacklevel=2)
+        return torch.device("cpu")
+
+    return torch.device(normalized)
 
 
 def _load_index_map(path: Path) -> dict[str, int]:
@@ -77,7 +112,7 @@ def _load_positive_seen_item_indices(
     user_to_idx: dict[str, int],
     item_to_idx: dict[str, int],
 ) -> dict[int, set[int]]:
-    """读取训练正样本，构建用户已交互物品索引集合。"""
+    """读取训练集中用户正样本物品索引，用于抑制重复推荐。"""
     seen: dict[int, set[int]] = {}
     for row in _iter_jsonl(interactions_train_jsonl):
         if _to_int(row.get("label"), default=0) <= 0:
@@ -99,13 +134,112 @@ def _load_positive_seen_item_indices(
     return seen
 
 
-def _score_user_batch(
+def _select_safe_item_block_size(
+    *,
+    requested_item_block_size: int,
+    embedding_dim: int,
+    runtime_device: torch.device,
+) -> int:
+    if requested_item_block_size <= 0:
+        raise ValueError("item_block_size 必须大于 0")
+
+    if runtime_device.type != "cuda":
+        return requested_item_block_size
+
+    try:
+        device_properties = torch.cuda.get_device_properties(runtime_device)
+    except Exception:
+        return requested_item_block_size
+
+    total_memory = int(device_properties.total_memory)
+    bytes_per_item = max(embedding_dim, 1) * 4
+    safe_limit = max(int((total_memory * 0.35) // bytes_per_item), 1)
+    adjusted = min(requested_item_block_size, safe_limit)
+
+    if adjusted < requested_item_block_size:
+        warnings.warn(
+            "item_block_size 已根据显存自动下调，避免打分阶段 OOM。"
+            f" requested={requested_item_block_size}, adjusted={adjusted}",
+            stacklevel=2,
+        )
+    return adjusted
+
+
+def _score_user_batch_blockwise(
     *,
     user_vectors: torch.Tensor,
-    item_vectors_t: torch.Tensor,
-) -> torch.Tensor:
-    """批量计算用户向量与物品向量点积得分。"""
-    return torch.matmul(user_vectors, item_vectors_t)
+    item_embeddings: torch.Tensor,
+    batch_user_indices: list[int],
+    seen_item_indices: dict[int, set[int]],
+    effective_top_k: int,
+    item_block_size: int,
+    runtime_device: torch.device,
+    unk_item_index: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    batch_size = user_vectors.shape[0]
+    best_scores = torch.full(
+        (batch_size, effective_top_k),
+        fill_value=float("-inf"),
+        device=runtime_device,
+        dtype=torch.float32,
+    )
+    best_indices = torch.full(
+        (batch_size, effective_top_k),
+        fill_value=-1,
+        device=runtime_device,
+        dtype=torch.long,
+    )
+
+    total_items = item_embeddings.shape[0]
+    for block_start in range(0, total_items, item_block_size):
+        block_end = min(block_start + item_block_size, total_items)
+        item_block = item_embeddings[block_start:block_end].to(runtime_device)
+        block_scores = torch.matmul(user_vectors, item_block.transpose(0, 1))
+
+        if block_start <= unk_item_index < block_end:
+            block_scores[:, unk_item_index - block_start] = float("-inf")
+
+        for row_offset, user_idx in enumerate(batch_user_indices):
+            seen_set = seen_item_indices.get(user_idx)
+            if not seen_set:
+                continue
+
+            local_seen = [
+                item_idx - block_start
+                for item_idx in seen_set
+                if block_start <= item_idx < block_end
+            ]
+            if not local_seen:
+                continue
+
+            seen_tensor = torch.tensor(
+                local_seen, device=runtime_device, dtype=torch.long
+            )
+            block_scores[row_offset, seen_tensor] = float("-inf")
+
+        block_k = min(effective_top_k, block_end - block_start)
+        block_top_scores, block_top_local_indices = torch.topk(
+            block_scores,
+            k=block_k,
+            dim=1,
+            largest=True,
+            sorted=True,
+        )
+        block_top_indices = block_top_local_indices + block_start
+
+        merged_scores = torch.cat([best_scores, block_top_scores], dim=1)
+        merged_indices = torch.cat([best_indices, block_top_indices], dim=1)
+
+        best_scores, best_positions = torch.topk(
+            merged_scores,
+            k=effective_top_k,
+            dim=1,
+            largest=True,
+            sorted=True,
+        )
+        best_indices = torch.gather(merged_indices, 1, best_positions)
+
+    return best_scores, best_indices
 
 
 def build_two_tower_topk_from_embeddings(
@@ -118,9 +252,10 @@ def build_two_tower_topk_from_embeddings(
     output_jsonl: Path,
     top_k_items: int = 100,
     score_batch_size: int = 64,
+    item_block_size: int = 20_000,
     device: str = "auto",
 ) -> TwoTowerRankingSummary:
-    """基于 P4 导出的 embedding 生成 P6 的 user_topk_scored。"""
+    """基于训练导出的向量生成用户 TopK 推荐结果。"""
     if top_k_items <= 0:
         raise ValueError("top_k_items 必须大于 0")
     if score_batch_size <= 0:
@@ -152,15 +287,18 @@ def build_two_tower_topk_from_embeddings(
     )
 
     runtime_device = _resolve_device(device)
-    item_embeddings_device = item_embeddings.to(runtime_device)
-    item_embeddings_t = item_embeddings_device.transpose(0, 1).contiguous()
+    item_block_size = _select_safe_item_block_size(
+        requested_item_block_size=item_block_size,
+        embedding_dim=int(item_embeddings.shape[1]),
+        runtime_device=runtime_device,
+    )
 
-    # 0 号通常是 __UNK__，不参与推荐。
+    # 索引 0 通常是 __UNK__，不应进入推荐结果。
     unk_item_index = 0
     max_item_candidates = max(item_embeddings.shape[0] - 1, 1)
     effective_top_k = min(top_k_items, max_item_candidates)
 
-    # 仅对真实用户（排除索引 0 的 __UNK__）进行推荐。
+    # 仅对真实用户做推荐（排除 __UNK__ 索引 0）。
     user_indices = [
         idx
         for idx in sorted(user_to_idx.values())
@@ -183,35 +321,39 @@ def build_two_tower_topk_from_embeddings(
                 continue
 
             user_tensor = user_embeddings[batch_user_indices].to(runtime_device)
-            score_matrix = _score_user_batch(
-                user_vectors=user_tensor,
-                item_vectors_t=item_embeddings_t,
-            )
-
-            if unk_item_index < score_matrix.shape[1]:
-                score_matrix[:, unk_item_index] = float("-inf")
-
-            # 屏蔽训练集中该用户已看过的正样本，降低“重复推荐已听歌曲”的概率。
-            for row_offset, user_idx in enumerate(batch_user_indices):
-                seen_set = seen_item_indices.get(user_idx)
-                if not seen_set:
-                    continue
-                seen_tensor = torch.tensor(
-                    sorted(seen_set),
-                    device=runtime_device,
-                    dtype=torch.long,
+            try:
+                top_scores, top_indices = _score_user_batch_blockwise(
+                    user_vectors=user_tensor,
+                    item_embeddings=item_embeddings,
+                    batch_user_indices=batch_user_indices,
+                    seen_item_indices=seen_item_indices,
+                    effective_top_k=effective_top_k,
+                    item_block_size=item_block_size,
+                    runtime_device=runtime_device,
+                    unk_item_index=unk_item_index,
                 )
-                seen_tensor = seen_tensor[seen_tensor < score_matrix.shape[1]]
-                if seen_tensor.numel() > 0:
-                    score_matrix[row_offset, seen_tensor] = float("-inf")
-
-            top_scores, top_indices = torch.topk(
-                score_matrix,
-                k=effective_top_k,
-                dim=1,
-                largest=True,
-                sorted=True,
-            )
+            except RuntimeError as exc:
+                error_text = str(exc).lower()
+                if runtime_device.type == "cuda" and "out of memory" in error_text:
+                    warnings.warn(
+                        "CUDA 显存不足，已回退到 CPU 继续完成推理。",
+                        stacklevel=2,
+                    )
+                    torch.cuda.empty_cache()
+                    runtime_device = torch.device("cpu")
+                    user_tensor = user_embeddings[batch_user_indices].to(runtime_device)
+                    top_scores, top_indices = _score_user_batch_blockwise(
+                        user_vectors=user_tensor,
+                        item_embeddings=item_embeddings,
+                        batch_user_indices=batch_user_indices,
+                        seen_item_indices=seen_item_indices,
+                        effective_top_k=effective_top_k,
+                        item_block_size=item_block_size,
+                        runtime_device=runtime_device,
+                        unk_item_index=unk_item_index,
+                    )
+                else:
+                    raise
 
             top_scores_cpu = top_scores.detach().cpu()
             top_indices_cpu = top_indices.detach().cpu()
@@ -225,6 +367,8 @@ def build_two_tower_topk_from_embeddings(
                     top_indices_cpu[row_offset].tolist()
                 ):
                     score_value = float(top_scores_cpu[row_offset][rank_offset].item())
+                    if item_idx < 0:
+                        continue
                     if not math.isfinite(score_value):
                         continue
 
@@ -276,6 +420,7 @@ def build_two_tower_topk_from_embeddings(
         "settings": {
             "top_k_items": top_k_items,
             "score_batch_size": score_batch_size,
+            "item_block_size": item_block_size,
             "device": str(runtime_device),
         },
         "summary": {
@@ -300,6 +445,7 @@ def build_two_tower_topk_from_embeddings(
         unique_recommended_songs=len(unique_recommended_songs),
         top_k_items=top_k_items,
         score_batch_size=score_batch_size,
+        item_block_size=item_block_size,
         device=str(runtime_device),
         output_path=str(output_jsonl),
         meta_path=str(meta_path),
@@ -307,5 +453,5 @@ def build_two_tower_topk_from_embeddings(
 
 
 def summary_to_json(summary: TwoTowerRankingSummary) -> str:
-    """将构建摘要转为 JSON 字符串。"""
+    """将排序摘要序列化为 JSON 字符串。"""
     return json.dumps(asdict(summary), ensure_ascii=False, indent=2)

@@ -35,6 +35,8 @@ class PlayCount(Base):
         UniqueConstraint("song_id", name="uq_play_counts_song_id"),
         # 常见查询为按播放次数倒序取 TopN，这里先提供基础索引。
         Index("ix_play_counts_total_play_count", "total_play_count"),
+        # 热门榜单分页按播放量和 song_id 排序，复合索引可降低 filesort 风险。
+        Index("ix_play_counts_rank", "total_play_count", "song_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

@@ -1,4 +1,4 @@
-"""P5：将 content_based 排序结果写回 Redis。"""
+"""将 content_based 排序结果写回 Redis。"""
 
 from __future__ import annotations
 
@@ -144,7 +144,7 @@ def write_content_based_ranked_to_redis(
     dry_run: bool = False,
     strategy_override: str | None = None,
 ) -> RedisWritebackSummary:
-    """将 P4 产物写入 Redis 并输出写回报告。"""
+    """将排序产物写入 Redis 并输出写回报告。"""
     if key_version <= 0:
         raise ValueError("key_version 必须大于 0")
     if ttl_seconds <= 0:

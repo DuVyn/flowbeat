@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import (
@@ -58,10 +59,17 @@ class AuthService:
             registration_init_time=now,
         )
         self.db.add(user)
-        await self.db.flush()
+        try:
+            await self.db.flush()
+            auth_response = await self._issue_token_bundle(user=user, now=now)
+            await self.db.commit()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="邮箱已注册",
+            ) from exc
 
-        auth_response = await self._issue_token_bundle(user=user, now=now)
-        await self.db.commit()
         await self.db.refresh(user)
         return auth_response
 

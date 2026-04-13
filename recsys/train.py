@@ -1,69 +1,48 @@
-"""Two-Tower P0-P4 训练入口。
+"""双塔模型训练入口。
 
-当前实现覆盖：
-- P0 数据口径冻结
-- P1 样本构建
-- P2 特征工程
-- P3 训练配置与运行上下文准备
-- P4 本地最小可行训练
+当前实现按顺序执行：
+- 数据契约校验
+- 样本构建
+- 特征构建
+- 运行上下文准备
+- 模型训练与向量导出
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+try:
+    from runtime_paths import (
+        detect_workspace_root,
+        resolve_existing_config_path,
+        resolve_workspace_path,
+    )
+except ModuleNotFoundError as exc:
+    if __name__ == "__main__":
+        raise RuntimeError(
+            "未找到训练入口依赖。请在 recsys 目录执行："
+            "uv run python train.py --config configs/two_tower/local_mvp.json"
+        ) from exc
+    raise
+
+
 CURRENT_FILE = Path(__file__).resolve()
 RECSYS_ROOT = CURRENT_FILE.parent
-WORKSPACE_ROOT = RECSYS_ROOT.parent
+WORKSPACE_ROOT = detect_workspace_root(anchor_file=CURRENT_FILE)
 
 
-def _ensure_runtime_paths() -> None:
-    """补齐运行时导入路径，兼容从不同目录触发脚本。"""
-    for path_candidate in (WORKSPACE_ROOT, RECSYS_ROOT):
-        path_str = str(path_candidate)
-        if path_str not in sys.path:
-            sys.path.insert(0, path_str)
-
-
-def _resolve_existing_path(path_text: str) -> Path:
-    path = Path(path_text)
-    if path.is_absolute():
-        return path
-
-    name_candidates = [path.name]
-    if not path.suffix:
-        name_candidates.append(f"{path.name}.json")
-
-    candidates = [
-        (Path.cwd() / path).resolve(),
-        (RECSYS_ROOT / path).resolve(),
-        (WORKSPACE_ROOT / path).resolve(),
-    ]
-    for name in name_candidates:
-        candidates.extend(
-            [
-                (RECSYS_ROOT / "configs" / "two_tower" / name).resolve(),
-                (RECSYS_ROOT / "configs" / name).resolve(),
-                (WORKSPACE_ROOT / "recsys" / "configs" / "two_tower" / name).resolve(),
-            ]
-        )
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return candidates[0]
-
-
-def _resolve_workspace_path(path_text: str) -> Path:
-    path = Path(path_text)
-    if path.is_absolute():
-        return path
-    return (WORKSPACE_ROOT / path).resolve()
+def _to_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    return text in {"1", "true", "yes", "on"}
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -73,21 +52,31 @@ def _load_json(path: Path) -> dict[str, Any]:
 def build_argument_parser() -> argparse.ArgumentParser:
     """构建命令行参数解析器。"""
     parser = argparse.ArgumentParser(
-        description="执行 two_tower 的 P0-P4 流水线。",
+        description="执行 two_tower 训练全链路（数据契约、样本、特征、训练）。",
     )
     parser.add_argument(
         "--config",
         default="configs/two_tower/local_mvp.json",
         help="配置文件路径，默认 local_mvp。",
     )
+    parser.add_argument(
+        "--allow-external-paths",
+        action="store_true",
+        help="允许使用工作区外绝对路径（默认关闭以避免跨宿主机路径失效）。",
+    )
     return parser
 
 
-def run_pipeline(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
-    """执行 P0-P4 阶段并返回结构化摘要。"""
-    _ensure_runtime_paths()
-
-    from datasets.two_tower.build_interactions import build_two_tower_interactions
+def run_pipeline(
+    config: dict[str, Any],
+    config_path: Path,
+    *,
+    allow_external_paths: bool,
+) -> dict[str, Any]:
+    """执行训练流水线并返回结构化摘要。"""
+    from datasets.two_tower.build_interactions import (
+        build_two_tower_interactions,
+    )
     from datasets.two_tower.data_contract import freeze_data_contract
     from features.two_tower.build_features import build_two_tower_features
     from training.two_tower.run_context import prepare_two_tower_run_context
@@ -107,29 +96,57 @@ def run_pipeline(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
 
     input_cfg = dict(config.get("input") or {})
     input_paths = {
-        "users_csv": _resolve_workspace_path(str(input_cfg["users_csv"])),
-        "songs_csv": _resolve_workspace_path(str(input_cfg["songs_csv"])),
-        "play_histories_csv": _resolve_workspace_path(
-            str(input_cfg["play_histories_csv"])
+        "users_csv": resolve_workspace_path(
+            str(input_cfg["users_csv"]),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
         ),
-        "play_counts_csv": _resolve_workspace_path(str(input_cfg["play_counts_csv"])),
-        "user_preference_csv": _resolve_workspace_path(
-            str(input_cfg["user_preference_csv"])
+        "songs_csv": resolve_workspace_path(
+            str(input_cfg["songs_csv"]),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
         ),
-        "song_genre_csv": _resolve_workspace_path(str(input_cfg["song_genre_csv"])),
+        "play_histories_csv": resolve_workspace_path(
+            str(input_cfg["play_histories_csv"]),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        ),
+        "play_counts_csv": resolve_workspace_path(
+            str(input_cfg["play_counts_csv"]),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        ),
+        "user_preference_csv": resolve_workspace_path(
+            str(input_cfg["user_preference_csv"]),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        ),
+        "song_genre_csv": resolve_workspace_path(
+            str(input_cfg["song_genre_csv"]),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        ),
     }
 
-    artifacts_root = _resolve_workspace_path(
-        str(output_cfg.get("artifacts_root") or "recsys/artifacts/two_tower")
+    artifacts_root = resolve_workspace_path(
+        str(output_cfg.get("artifacts_root") or "recsys/artifacts/two_tower"),
+        workspace_root=WORKSPACE_ROOT,
+        allow_external_paths=allow_external_paths,
     )
-    datasets_dir = _resolve_workspace_path(
-        str(output_cfg.get("datasets_dir") or "recsys/artifacts/two_tower/datasets")
+    datasets_dir = resolve_workspace_path(
+        str(output_cfg.get("datasets_dir") or "recsys/artifacts/two_tower/datasets"),
+        workspace_root=WORKSPACE_ROOT,
+        allow_external_paths=allow_external_paths,
     )
-    features_dir = _resolve_workspace_path(
-        str(output_cfg.get("features_dir") or "recsys/artifacts/two_tower/features")
+    features_dir = resolve_workspace_path(
+        str(output_cfg.get("features_dir") or "recsys/artifacts/two_tower/features"),
+        workspace_root=WORKSPACE_ROOT,
+        allow_external_paths=allow_external_paths,
     )
-    reports_dir = _resolve_workspace_path(
-        str(output_cfg.get("reports_dir") or "recsys/artifacts/two_tower/reports")
+    reports_dir = resolve_workspace_path(
+        str(output_cfg.get("reports_dir") or "recsys/artifacts/two_tower/reports"),
+        workspace_root=WORKSPACE_ROOT,
+        allow_external_paths=allow_external_paths,
     )
 
     reports_dir.mkdir(parents=True, exist_ok=True)
@@ -153,8 +170,10 @@ def run_pipeline(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
     }
 
     if "p0" in stages:
-        schema_path = _resolve_workspace_path(
-            str(p0_cfg.get("schema_json") or "recsys/configs/two_tower/schema_v1.json")
+        schema_path = resolve_workspace_path(
+            str(p0_cfg.get("schema_json") or "recsys/configs/two_tower/schema_v1.json"),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
         )
         schema = _load_json(schema_path)
 
@@ -251,7 +270,7 @@ def run_pipeline(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
 
     if "p4" in stages:
         if p3_summary is None:
-            raise RuntimeError("执行 P4 前必须先准备 P3 运行上下文。")
+            raise RuntimeError("执行训练前必须先准备运行上下文。")
 
         training_config = dict(p4_cfg.get("training") or p3_cfg.get("training") or {})
         p4_summary = train_two_tower_local_mvp(
@@ -272,10 +291,24 @@ def main() -> None:
     parser = build_argument_parser()
     args = parser.parse_args()
 
-    config_path = _resolve_existing_path(str(args.config))
+    config_path = resolve_existing_config_path(
+        str(args.config),
+        workspace_root=WORKSPACE_ROOT,
+        recsys_root=RECSYS_ROOT,
+        allow_external_paths=True,
+    )
     config = _load_json(config_path)
 
-    summary = run_pipeline(config=config, config_path=config_path)
+    pipeline_cfg = dict(config.get("pipeline") or {})
+    allow_external_paths = bool(args.allow_external_paths) or _to_bool(
+        pipeline_cfg.get("allow_external_paths", False)
+    )
+
+    summary = run_pipeline(
+        config=config,
+        config_path=config_path,
+        allow_external_paths=allow_external_paths,
+    )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 

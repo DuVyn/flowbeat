@@ -1,4 +1,4 @@
-"""P4：Two-Tower 模型定义。"""
+"""Two-Tower 模型定义。"""
 
 from __future__ import annotations
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
+from pydantic import ValidationError
 from redis.asyncio import Redis
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,7 @@ from app.schemas.music import (
     RecommendationStrategy,
     TrackResponse,
 )
+from app.services.track_mapper import to_track_response
 
 
 class RecommendationService:
@@ -25,6 +27,8 @@ class RecommendationService:
 
     _TWO_TOWER_KEY_VERSION = 2
     _CONTENT_KEY_VERSION = 1
+    _HOT_TOTAL_CACHE_KEY = "rec:global:hot:v1:total"
+    _HOT_TOTAL_CACHE_TTL_SECONDS = 60
 
     @classmethod
     def _build_two_tower_key(cls, user_id: int) -> str:
@@ -45,25 +49,34 @@ class RecommendationService:
         self.db = db
         self.redis_client = redis_client
 
-    @staticmethod
-    def _to_track_response(
-        *,
-        song_pk: int,
-        song_id: str,
-        name: str | None,
-        artist_name: str | None,
-        song_length: int | None,
-    ) -> TrackResponse:
-        """将歌曲基础字段转换为前端 Track 结构。"""
-        return TrackResponse(
-            id=song_pk,
-            song_id=song_id,
-            name=name or song_id,
-            artist=artist_name or "未知艺术家",
-            album="未知专辑",
-            cover_url="",
-            duration_ms=song_length or 0,
-        )
+    async def _get_hot_total(self) -> int:
+        """读取热门总数，优先使用短 TTL 缓存。"""
+        try:
+            cached_total: str | None = await self.redis_client.get(
+                self._HOT_TOTAL_CACHE_KEY
+            )
+        except Exception:
+            cached_total = None
+
+        if cached_total is not None:
+            try:
+                return int(cached_total)
+            except (TypeError, ValueError):
+                try:
+                    await self.redis_client.delete(self._HOT_TOTAL_CACHE_KEY)
+                except Exception:
+                    pass
+
+        total = int(await self.db.scalar(select(func.count(PlayCount.id))) or 0)
+        try:
+            await self.redis_client.setex(
+                self._HOT_TOTAL_CACHE_KEY,
+                self._HOT_TOTAL_CACHE_TTL_SECONDS,
+                str(total),
+            )
+        except Exception:
+            pass
+        return total
 
     async def _load_tracks_by_song_pk_ids(
         self, song_pk_ids: list[int]
@@ -88,7 +101,7 @@ class RecommendationService:
             if row is None:
                 continue
             tracks.append(
-                self._to_track_response(
+                to_track_response(
                     song_pk=int(row.id),
                     song_id=str(row.song_id),
                     name=row.name,
@@ -112,10 +125,15 @@ class RecommendationService:
         except Exception:
             cached = None
         if cached:
-            return HotRecommendationsResponse.model_validate_json(cached)
+            try:
+                return HotRecommendationsResponse.model_validate_json(cached)
+            except ValidationError:
+                try:
+                    await self.redis_client.delete(cache_key)
+                except Exception:
+                    pass
 
-        total_stmt = select(func.count(PlayCount.id))
-        total = int(await self.db.scalar(total_stmt) or 0)
+        total = await self._get_hot_total()
 
         top_song_stmt = (
             select(PlayCount.song_id)
@@ -244,7 +262,7 @@ class RecommendationService:
             if row is None:
                 continue
             tracks.append(
-                self._to_track_response(
+                to_track_response(
                     song_pk=int(row.id),
                     song_id=str(row.song_id),
                     name=row.name,

@@ -1,8 +1,8 @@
-"""P3：Content-Based 候选召回。
+"""Content-Based 候选召回。
 
 输入：
-- song_content_profile.jsonl（P1 产物）
-- user_preference_profile.jsonl（P2 产物）
+- song_content_profile.jsonl（歌曲画像产物）
+- user_preference_profile.jsonl（用户偏好画像产物）
 
 输出：
 - user_candidate_set.jsonl
@@ -45,17 +45,37 @@ def _iter_jsonl(path: Path):
 
 
 def _to_float(value: object, default: float = 0.0) -> float:
-    try:
+    if isinstance(value, bool):
         return float(value)
-    except (TypeError, ValueError):
-        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return default
+        try:
+            return float(text)
+        except ValueError:
+            return default
+    return default
 
 
 def _to_int(value: object, default: int = 0) -> int:
-    try:
+    if isinstance(value, bool):
         return int(value)
-    except (TypeError, ValueError):
-        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return default
+        try:
+            return int(text)
+        except ValueError:
+            return default
+    return default
 
 
 def _build_genre_top_song_index(

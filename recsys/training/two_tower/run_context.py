@@ -1,4 +1,4 @@
-"""P3：Two-Tower 训练配置与运行上下文准备。"""
+"""Two-Tower 训练配置与运行上下文准备。"""
 
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def prepare_two_tower_run_context(
         encoding="utf-8",
     )
 
-    # 训练日志模板用于后续 P4 直接填充，不再临时定义字段。
+    # 训练日志模板用于后续训练过程直接填充，不再临时定义字段。
     log_template = {
         "run_id": run_id,
         "log_schema_version": "two_tower_train_log_v1",
@@ -96,7 +96,7 @@ def prepare_two_tower_run_context(
             "ndcg_at_k",
             "learning_rate",
         ],
-        "notes": "P4 训练阶段按该字段结构持续追加日志。",
+        "notes": "训练阶段按该字段结构持续追加日志。",
     }
     log_template_path = run_dir / "training_log_template.json"
     log_template_path.write_text(

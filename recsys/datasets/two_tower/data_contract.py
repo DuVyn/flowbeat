@@ -1,4 +1,4 @@
-"""P0：Two-Tower 数据口径冻结与契约校验。"""
+"""Two-Tower 数据口径冻结与契约校验。"""
 
 from __future__ import annotations
 
@@ -97,7 +97,7 @@ def freeze_data_contract(
             "invalid_column_files": invalid_column_files,
         }
         raise ValueError(
-            "P0 数据口径冻结失败，存在缺失文件或字段不匹配："
+            "数据口径冻结失败，存在缺失文件或字段不匹配："
             + json.dumps(problems, ensure_ascii=False)
         )
 

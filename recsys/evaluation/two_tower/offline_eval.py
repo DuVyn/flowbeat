@@ -1,4 +1,4 @@
-"""Two-Tower P5：离线评估（Recall@K / NDCG@K / Coverage）。"""
+"""Two-Tower 离线评估（Recall@K / NDCG@K / Coverage）。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 @dataclass(slots=True)
 class TwoTowerEvaluationSummary:
-    """P5 评估摘要。"""
+    """离线评估摘要。"""
 
     total_ranked_users: int
     evaluable_users: int
@@ -36,10 +36,21 @@ def _iter_jsonl(path: Path):
 
 
 def _to_int(value: object, default: int = 0) -> int:
-    try:
+    if isinstance(value, bool):
         return int(value)
-    except (TypeError, ValueError):
-        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return default
+        try:
+            return int(text)
+        except ValueError:
+            return default
+    return default
 
 
 def _deduplicate_keep_order(items: list[str]) -> list[str]:

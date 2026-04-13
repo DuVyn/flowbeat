@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
@@ -56,8 +56,8 @@ class Settings(BaseSettings):
 
     # Auth
     auth_token_secret: str = Field(
-        default="flowbeat-dev-secret-change-me",
         validation_alias="AUTH_TOKEN_SECRET",
+        min_length=32,
     )
     auth_token_issuer: str = Field(
         default="flowbeat-backend",
@@ -67,6 +67,13 @@ class Settings(BaseSettings):
         default=390000,
         validation_alias="PASSWORD_HASH_ITERATIONS",
     )
+
+    @field_validator("auth_token_secret")
+    @classmethod
+    def validate_auth_token_secret(cls, value: str) -> str:
+        if value == "flowbeat-dev-secret-change-me":
+            raise ValueError("AUTH_TOKEN_SECRET 不能使用默认弱密钥")
+        return value
 
     # CORS
     cors_allow_origins: list[str] = Field(

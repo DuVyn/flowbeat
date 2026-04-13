@@ -1,26 +1,29 @@
-"""Content-Based P3 候选召回构建入口。"""
+"""基于内容的候选召回构建入口。"""
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import asdict
 from pathlib import Path
 
-CURRENT_FILE = Path(__file__).resolve()
-RECSYS_ROOT = CURRENT_FILE.parents[2]
-WORKSPACE_ROOT = CURRENT_FILE.parents[3]
+try:
+    from runtime_paths import detect_workspace_root, resolve_workspace_path
+except ModuleNotFoundError as exc:
+    if __name__ == "__main__":
+        raise RuntimeError(
+            "未找到候选召回入口依赖。请在 recsys 目录执行："
+            "uv run python inference/content_based/build_candidates.py"
+        ) from exc
+    raise
 
-for path_candidate in (WORKSPACE_ROOT, RECSYS_ROOT):
-    path_str = str(path_candidate)
-    if path_str not in sys.path:
-        sys.path.insert(0, path_str)
+
+WORKSPACE_ROOT = detect_workspace_root(anchor_file=Path(__file__).resolve())
 
 
 def _default_paths() -> tuple[Path, Path]:
     """返回默认输入输出目录。"""
-    project_root = Path(__file__).resolve().parents[3]
+    project_root = WORKSPACE_ROOT
     artifacts_root = project_root / "recsys" / "artifacts" / "content_based"
     return artifacts_root / "features", artifacts_root / "candidates"
 
@@ -29,9 +32,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     """构建命令行参数解析器。"""
     feature_dir, candidate_dir = _default_paths()
 
-    parser = argparse.ArgumentParser(
-        description="构建 content_based 的 P3 用户候选集。"
-    )
+    parser = argparse.ArgumentParser(description="构建 content_based 用户候选集。")
     parser.add_argument(
         "--user-profile-jsonl",
         default=str(feature_dir / "user_preference_profile.jsonl"),
@@ -56,6 +57,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=400,
         help="每个流派参与召回的歌曲上限。",
     )
+    parser.add_argument(
+        "--allow-external-paths",
+        action="store_true",
+        help="允许使用工作区外绝对路径。",
+    )
     return parser
 
 
@@ -66,10 +72,24 @@ def main() -> None:
     parser = build_argument_parser()
     args = parser.parse_args()
 
+    allow_external_paths = bool(args.allow_external_paths)
+
     summary = build_user_candidate_set(
-        user_profile_jsonl=Path(args.user_profile_jsonl),
-        song_profile_jsonl=Path(args.song_profile_jsonl),
-        output_jsonl=Path(args.output_jsonl),
+        user_profile_jsonl=resolve_workspace_path(
+            str(args.user_profile_jsonl),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        ),
+        song_profile_jsonl=resolve_workspace_path(
+            str(args.song_profile_jsonl),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        ),
+        output_jsonl=resolve_workspace_path(
+            str(args.output_jsonl),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        ),
         top_k_candidates=args.top_k_candidates,
         max_songs_per_genre=args.max_songs_per_genre,
     )

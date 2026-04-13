@@ -1,26 +1,29 @@
-"""Content-Based P4 排序打分构建入口。"""
+"""Content-Based 排序打分构建入口。"""
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import asdict
 from pathlib import Path
 
-CURRENT_FILE = Path(__file__).resolve()
-RECSYS_ROOT = CURRENT_FILE.parents[2]
-WORKSPACE_ROOT = CURRENT_FILE.parents[3]
+try:
+    from runtime_paths import detect_workspace_root, resolve_workspace_path
+except ModuleNotFoundError as exc:
+    if __name__ == "__main__":
+        raise RuntimeError(
+            "未找到排序打分入口依赖。请在 recsys 目录执行："
+            "uv run python inference/content_based/build_ranked.py"
+        ) from exc
+    raise
 
-for path_candidate in (WORKSPACE_ROOT, RECSYS_ROOT):
-    path_str = str(path_candidate)
-    if path_str not in sys.path:
-        sys.path.insert(0, path_str)
+
+WORKSPACE_ROOT = detect_workspace_root(anchor_file=Path(__file__).resolve())
 
 
 def _default_paths() -> tuple[Path, Path, Path]:
     """返回默认输入输出目录。"""
-    project_root = Path(__file__).resolve().parents[3]
+    project_root = WORKSPACE_ROOT
     artifacts_root = project_root / "recsys" / "artifacts" / "content_based"
     return (
         artifacts_root / "candidates",
@@ -34,7 +37,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     candidate_dir, feature_dir, ranked_dir = _default_paths()
 
     parser = argparse.ArgumentParser(
-        description="构建 content_based 的 P4 用户 TopK 打分结果。"
+        description="构建 content_based 用户 TopK 打分结果。"
     )
     parser.add_argument(
         "--candidate-jsonl",
@@ -60,20 +63,39 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=0.88,
         help="艺术家重复惩罚系数，越小惩罚越强，范围 (0, 1]。",
     )
+    parser.add_argument(
+        "--allow-external-paths",
+        action="store_true",
+        help="允许使用工作区外绝对路径。",
+    )
     return parser
 
 
 def main() -> None:
-    """执行 P4 规则打分构建。"""
+    """执行规则打分构建。"""
     from inference.content_based.rank_scoring import build_user_topk_scored
 
     parser = build_argument_parser()
     args = parser.parse_args()
 
+    allow_external_paths = bool(args.allow_external_paths)
+
     summary = build_user_topk_scored(
-        candidate_jsonl=Path(args.candidate_jsonl),
-        song_profile_jsonl=Path(args.song_profile_jsonl),
-        output_jsonl=Path(args.output_jsonl),
+        candidate_jsonl=resolve_workspace_path(
+            str(args.candidate_jsonl),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        ),
+        song_profile_jsonl=resolve_workspace_path(
+            str(args.song_profile_jsonl),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        ),
+        output_jsonl=resolve_workspace_path(
+            str(args.output_jsonl),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        ),
         top_k_items=args.top_k_items,
         artist_decay=args.artist_decay,
     )

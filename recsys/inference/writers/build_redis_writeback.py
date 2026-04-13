@@ -4,23 +4,26 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import asdict
 from pathlib import Path
 
-CURRENT_FILE = Path(__file__).resolve()
-RECSYS_ROOT = CURRENT_FILE.parents[2]
-WORKSPACE_ROOT = CURRENT_FILE.parents[3]
+try:
+    from runtime_paths import detect_workspace_root, resolve_workspace_path
+except ModuleNotFoundError as exc:
+    if __name__ == "__main__":
+        raise RuntimeError(
+            "未找到 Redis 写回入口依赖。请在 recsys 目录执行："
+            "uv run python inference/writers/build_redis_writeback.py"
+        ) from exc
+    raise
 
-for path_candidate in (WORKSPACE_ROOT, RECSYS_ROOT):
-    path_str = str(path_candidate)
-    if path_str not in sys.path:
-        sys.path.insert(0, path_str)
+
+WORKSPACE_ROOT = detect_workspace_root(anchor_file=Path(__file__).resolve())
 
 
 def _default_paths(strategy: str) -> tuple[Path, Path, Path]:
     """按策略返回默认输入输出路径。"""
-    project_root = Path(__file__).resolve().parents[3]
+    project_root = WORKSPACE_ROOT
     artifacts_root = project_root / "recsys" / "artifacts"
 
     if strategy == "two_tower":
@@ -105,20 +108,37 @@ def build_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="仅做映射与统计，不实际写入 Redis。",
     )
+    parser.add_argument(
+        "--allow-external-paths",
+        action="store_true",
+        help="允许使用工作区外绝对路径。",
+    )
     return parser
 
 
 def main() -> None:
-    """执行 P5 Redis 写回。"""
-    from inference.writers.redis_writeback import write_content_based_ranked_to_redis
+    """执行 Redis 写回。"""
+    from inference.writers.redis_writeback import (
+        write_content_based_ranked_to_redis,
+    )
 
     parser = build_argument_parser()
     args = parser.parse_args()
 
     default_ranked_jsonl, default_report_json, _ = _default_paths(args.strategy)
 
-    ranked_jsonl = Path(args.ranked_jsonl)
-    report_json = Path(args.report_json)
+    allow_external_paths = bool(args.allow_external_paths)
+
+    ranked_jsonl = resolve_workspace_path(
+        str(args.ranked_jsonl),
+        workspace_root=WORKSPACE_ROOT,
+        allow_external_paths=allow_external_paths,
+    )
+    report_json = resolve_workspace_path(
+        str(args.report_json),
+        workspace_root=WORKSPACE_ROOT,
+        allow_external_paths=allow_external_paths,
+    )
     if str(args.ranked_jsonl) == parser.get_default("ranked_jsonl"):
         ranked_jsonl = default_ranked_jsonl
     if str(args.report_json) == parser.get_default("report_json"):
@@ -135,7 +155,11 @@ def main() -> None:
     summary = write_content_based_ranked_to_redis(
         ranked_jsonl=ranked_jsonl,
         report_json=report_json,
-        env_file=Path(args.env_file),
+        env_file=resolve_workspace_path(
+            str(args.env_file),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        ),
         key_version=key_version,
         ttl_seconds=args.ttl_seconds,
         max_items=args.max_items,

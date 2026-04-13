@@ -1,4 +1,4 @@
-"""P1：Two-Tower 训练样本构建。"""
+"""Two-Tower 训练样本构建。"""
 
 from __future__ import annotations
 
@@ -196,7 +196,7 @@ def build_two_tower_interactions(
             )
 
     if not positive_events:
-        raise ValueError("未找到可用正样本，无法继续 P1。")
+        raise ValueError("未找到可用正样本，无法继续样本构建。")
 
     user_positive_counter: Counter[str] = Counter(
         str(event["user_key"]) for event in positive_events

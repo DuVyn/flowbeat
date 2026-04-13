@@ -68,7 +68,7 @@ class PlayHistoryService:
             )
             .join(Song, Song.id == PlayHistory.song_id)
             .where(PlayHistory.user_id == user_id)
-            .order_by(PlayHistory.played_at.desc())
+            .order_by(PlayHistory.played_at.desc(), PlayHistory.id.desc())
             .limit(query_limit)
             .offset(offset)
         )

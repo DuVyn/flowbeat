@@ -1,4 +1,4 @@
-"""P2：Two-Tower 用户侧/物品侧特征构建。"""
+"""Two-Tower 用户侧/物品侧特征构建。"""
 
 from __future__ import annotations
 

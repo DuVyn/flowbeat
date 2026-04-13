@@ -1,8 +1,8 @@
-"""P4：Content-Based 规则打分层。
+"""Content-Based 规则打分层。
 
 输入：
-- user_candidate_set.jsonl（P3 产物）
-- song_content_profile.jsonl（P1 产物）
+- user_candidate_set.jsonl（候选召回产物）
+- song_content_profile.jsonl（歌曲画像产物）
 
 输出：
 - user_topk_scored.jsonl
@@ -20,7 +20,7 @@ from pathlib import Path
 
 @dataclass(slots=True)
 class RankingBuildSummary:
-    """P4 打分构建摘要。"""
+    """打分构建摘要。"""
 
     total_users: int
     users_with_candidates: int
@@ -44,17 +44,37 @@ def _iter_jsonl(path: Path):
 
 
 def _to_float(value: object, default: float = 0.0) -> float:
-    try:
+    if isinstance(value, bool):
         return float(value)
-    except (TypeError, ValueError):
-        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return default
+        try:
+            return float(text)
+        except ValueError:
+            return default
+    return default
 
 
 def _to_int(value: object, default: int = 0) -> int:
-    try:
+    if isinstance(value, bool):
         return int(value)
-    except (TypeError, ValueError):
-        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return default
+        try:
+            return int(text)
+        except ValueError:
+            return default
+    return default
 
 
 def _collect_candidate_song_ids(candidate_jsonl: Path) -> set[str]:
@@ -201,7 +221,15 @@ def build_user_topk_scored(
                     match_count / max_match_count if max_match_count > 0 else 0.0
                 )
 
-                song_genres = feature["genre_codes"]
+                song_genres_raw = feature.get("genre_codes", set())
+                if isinstance(song_genres_raw, set):
+                    song_genres = {
+                        str(code).strip()
+                        for code in song_genres_raw
+                        if str(code).strip()
+                    }
+                else:
+                    song_genres = set()
                 genre_overlap_count = len(song_genres & preference_genres)
                 genre_overlap_ratio = (
                     genre_overlap_count / len(preference_genres)
@@ -211,7 +239,7 @@ def build_user_topk_scored(
                 popularity_score = _to_float(feature["popularity_score"], default=0.0)
 
                 # 规则打分定义：
-                # - 0.45 召回分：继承 P3 的候选质量。
+                # - 0.45 召回分：继承候选召回阶段的候选质量。
                 # - 0.25 命中分：偏好多流派命中的歌曲优先。
                 # - 0.20 重叠分：偏好覆盖比例越高越优。
                 # - 0.10 热度分：在冷启动下兼顾稳定性。

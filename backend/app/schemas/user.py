@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
 GenderValue = Literal["male", "female", "unknown"]
+NonEmptyUsername = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=255),
+]
 
 
 class UserProfileResponse(BaseModel):
@@ -26,6 +30,6 @@ class UpdateUserProfileRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    username: str | None = Field(default=None, min_length=1, max_length=255)
+    username: NonEmptyUsername | None = None
     gender: GenderValue | None = None
     birthday: date | None = None

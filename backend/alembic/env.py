@@ -1,9 +1,17 @@
 import asyncio
+import os
+import secrets
 from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
+# Alembic 仅用于迁移，不参与鉴权逻辑。
+# 当本地未配置 AUTH_TOKEN_SECRET 时，为当前进程注入随机临时值，
+# 避免导入 Settings 时因缺参中断 autogenerate。
+if not os.getenv("AUTH_TOKEN_SECRET"):
+    os.environ["AUTH_TOKEN_SECRET"] = secrets.token_urlsafe(48)
 
 # 导入模型以确保所有表都注册到 Base.metadata
 import app.models  # noqa: F401

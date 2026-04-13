@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -36,6 +37,23 @@ def _b64url_encode(raw: bytes) -> str:
 def _b64url_decode(value: str) -> bytes:
     padding = "=" * (-len(value) % 4)
     return base64.urlsafe_b64decode(value + padding)
+
+
+def _decode_payload_dict(payload_b64: str) -> dict[str, Any]:
+    """解码并校验 Token 载荷必须为对象结构。"""
+    try:
+        payload_raw = _b64url_decode(payload_b64)
+    except (binascii.Error, ValueError) as exc:
+        raise SecurityError("Token 载荷编码无效") from exc
+
+    try:
+        payload_obj = json.loads(payload_raw)
+    except json.JSONDecodeError as exc:
+        raise SecurityError("Token 载荷无效") from exc
+
+    if not isinstance(payload_obj, dict):
+        raise SecurityError("Token 载荷结构无效")
+    return payload_obj
 
 
 def hash_password(password: str) -> str:
@@ -141,8 +159,8 @@ def decode_auth_token(token: str, *, expected_token_type: str) -> TokenPayload:
     if not hmac.compare_digest(expected_signature, actual_signature):
         raise SecurityError("Token 签名无效")
 
+    payload_obj = _decode_payload_dict(payload_b64)
     try:
-        payload_obj = json.loads(_b64url_decode(payload_b64))
         payload = TokenPayload(
             user_id=int(payload_obj["sub"]),
             session_id=int(payload_obj["sid"]),
@@ -150,8 +168,8 @@ def decode_auth_token(token: str, *, expected_token_type: str) -> TokenPayload:
             exp=int(payload_obj["exp"]),
             iss=str(payload_obj["iss"]),
         )
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise SecurityError("Token 载荷无效") from exc
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SecurityError("Token 载荷字段无效") from exc
 
     now_ts = int(datetime.now(timezone.utc).timestamp())
     if payload.exp <= now_ts:

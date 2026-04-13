@@ -38,7 +38,10 @@ class UserService:
         has_changes = False
 
         if payload.username is not None:
-            user.nickname = payload.username.strip()
+            normalized_username = payload.username.strip()
+            if not normalized_username:
+                raise ValueError("用户名不能为空")
+            user.nickname = normalized_username
             has_changes = True
 
         if payload.gender is not None:

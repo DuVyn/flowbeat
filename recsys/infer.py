@@ -1,69 +1,82 @@
-"""Two-Tower P5-P7 推理入口。"""
+"""双塔模型推理入口。"""
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+try:
+    from runtime_paths import (
+        detect_workspace_root,
+        resolve_existing_config_path,
+        resolve_workspace_path,
+    )
+except ModuleNotFoundError as exc:
+    if __name__ == "__main__":
+        raise RuntimeError(
+            "未找到推理入口依赖。请在 recsys 目录执行："
+            "uv run python infer.py --config configs/two_tower/local_mvp.json"
+        ) from exc
+    raise
+
+
 CURRENT_FILE = Path(__file__).resolve()
 RECSYS_ROOT = CURRENT_FILE.parent
-WORKSPACE_ROOT = RECSYS_ROOT.parent
+WORKSPACE_ROOT = detect_workspace_root(anchor_file=CURRENT_FILE)
 
 
-def _ensure_runtime_paths() -> None:
-    for path_candidate in (WORKSPACE_ROOT, RECSYS_ROOT):
-        path_str = str(path_candidate)
-        if path_str not in sys.path:
-            sys.path.insert(0, path_str)
-
-
-def _resolve_existing_path(path_text: str) -> Path:
-    path = Path(path_text)
-    if path.is_absolute():
-        return path
-
-    name_candidates = [path.name]
-    if not path.suffix:
-        name_candidates.append(f"{path.name}.json")
-
-    candidates = [
-        (Path.cwd() / path).resolve(),
-        (RECSYS_ROOT / path).resolve(),
-        (WORKSPACE_ROOT / path).resolve(),
-    ]
-    for name in name_candidates:
-        candidates.extend(
-            [
-                (RECSYS_ROOT / "configs" / "two_tower" / name).resolve(),
-                (RECSYS_ROOT / "configs" / name).resolve(),
-                (WORKSPACE_ROOT / "recsys" / "configs" / "two_tower" / name).resolve(),
-            ]
-        )
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return candidates[0]
-
-
-def _resolve_workspace_path(path_text: str) -> Path:
-    path = Path(path_text)
-    if path.is_absolute():
-        return path
-    return (WORKSPACE_ROOT / path).resolve()
+def _to_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    return text in {"1", "true", "yes", "on"}
 
 
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _read_p4_embeddings_from_report(p4_report_path: Path) -> dict[str, Path]:
+def _resolve_reported_path(
+    path_text: str,
+    *,
+    run_dir: Path,
+    allow_external_paths: bool,
+) -> Path:
+    path = Path(path_text).expanduser()
+    if path.is_absolute():
+        return resolve_workspace_path(
+            str(path),
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        )
+    return (run_dir / path).resolve()
+
+
+def _read_training_artifacts_from_report(
+    p4_report_path: Path,
+    *,
+    allow_external_paths: bool,
+) -> dict[str, Path]:
     report = _load_json(p4_report_path)
     embeddings = dict(report.get("embeddings") or {})
+
+    run_dir_text = str(
+        report.get("run_dir")
+        or (dict(report.get("artifacts") or {}).get("run_dir"))
+        or ""
+    ).strip()
+    run_dir: Path | None = None
+    if run_dir_text:
+        run_dir = resolve_workspace_path(
+            run_dir_text,
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        )
 
     required = {
         "user_embeddings": "user_embeddings",
@@ -71,13 +84,34 @@ def _read_p4_embeddings_from_report(p4_report_path: Path) -> dict[str, Path]:
         "user_index": "user_index",
         "item_index": "item_index",
     }
-    resolved: dict[str, Path] = {}
+    resolved: dict[str, Path] = {"run_dir": run_dir} if run_dir else {}
 
     for key, report_key in required.items():
         path_text = str(embeddings.get(report_key) or "").strip()
         if not path_text:
-            raise RuntimeError(f"P4 报告缺少字段: embeddings.{report_key}")
-        resolved[key] = _resolve_workspace_path(path_text)
+            raise RuntimeError(f"训练报告缺少字段: embeddings.{report_key}")
+
+        if run_dir is None and not Path(path_text).is_absolute():
+            raise RuntimeError(
+                "训练报告使用了相对路径，但缺少 run_dir，无法恢复产物绝对路径。"
+            )
+
+        if run_dir is not None:
+            resolved[key] = _resolve_reported_path(
+                path_text,
+                run_dir=run_dir,
+                allow_external_paths=allow_external_paths,
+            )
+            continue
+
+        resolved[key] = resolve_workspace_path(
+            path_text,
+            workspace_root=WORKSPACE_ROOT,
+            allow_external_paths=allow_external_paths,
+        )
+
+    if "run_dir" not in resolved:
+        resolved["run_dir"] = resolved["user_embeddings"].parent.parent
 
     return resolved
 
@@ -87,6 +121,7 @@ def _resolve_p4_artifacts(
     artifacts_root: Path,
     reports_dir: Path,
     run_id: str | None,
+    allow_external_paths: bool,
 ) -> dict[str, Path]:
     if run_id:
         run_dir = artifacts_root / "runs" / run_id
@@ -102,28 +137,26 @@ def _resolve_p4_artifacts(
         p4_report_path = reports_dir / "p4_training_report.json"
         if not p4_report_path.exists():
             raise RuntimeError(
-                "未找到 p4_training_report.json，请先完成 P4 训练，"
+                "未找到 p4_training_report.json，请先完成训练，"
                 "或通过 --run-id 显式指定训练运行目录。"
             )
 
-        embedding_paths = _read_p4_embeddings_from_report(p4_report_path)
-        run_dir = embedding_paths["user_embeddings"].parent.parent
-        resolved = {
-            "run_dir": run_dir,
-            **embedding_paths,
-        }
+        resolved = _read_training_artifacts_from_report(
+            p4_report_path,
+            allow_external_paths=allow_external_paths,
+        )
 
     for key in ("user_embeddings", "item_embeddings", "user_index", "item_index"):
         path = resolved[key]
         if not path.exists():
-            raise RuntimeError(f"P4 产物不存在: {path}")
+            raise RuntimeError(f"训练产物不存在: {path}")
 
     return resolved
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="执行 two_tower 的 P5-P7 流水线。",
+        description="执行 two_tower 推理与可选写回流程。",
     )
     parser.add_argument(
         "--config",
@@ -133,103 +166,128 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--run-id",
         default="",
-        help="可选：指定 P4 训练 run_id；为空时自动读取 p4_training_report.json。",
+        help="可选：指定训练 run_id；为空时自动读取 p4_training_report.json。",
     )
     parser.add_argument(
         "--top-k-items",
         type=int,
         default=100,
-        help="P6 每用户输出推荐数量。",
+        help="每用户输出推荐数量。",
     )
     parser.add_argument(
         "--score-batch-size",
         type=int,
         default=64,
-        help="P6 打分批大小，显存不足时可调小。",
+        help="用户批次大小，显存不足时可调小。",
+    )
+    parser.add_argument(
+        "--item-block-size",
+        type=int,
+        default=20_000,
+        help="物品向量分块大小，避免一次性将全量 item 向量搬到显存。",
     )
     parser.add_argument(
         "--device",
         default="auto",
-        help="推理设备：auto/cuda/cpu。",
+        help="推理设备：auto/cuda/mps/cpu。",
     )
     parser.add_argument(
         "--write-redis",
         action="store_true",
-        help="是否执行 P7 写回 Redis。",
+        help="是否将结果写回 Redis。",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="仅用于 P7：只统计不写 Redis。",
+        help="仅统计不写 Redis。",
     )
     parser.add_argument(
         "--key-version",
         type=int,
         default=2,
-        help="P7 Redis key 版本号（two_tower 建议 v2）。",
+        help="Redis key 版本号（two_tower 建议 v2）。",
     )
     parser.add_argument(
         "--ttl-seconds",
         type=int,
         default=86_400,
-        help="P7 Redis 过期时间（秒）。",
+        help="Redis 过期时间（秒）。",
     )
     parser.add_argument(
         "--redis-batch-size",
         type=int,
         default=500,
-        help="P7 Redis pipeline 批量大小。",
+        help="Redis pipeline 批量大小。",
     )
     parser.add_argument(
         "--redis-max-items",
         type=int,
         default=100,
-        help="P7 payload 每用户保留条数。",
+        help="写回 payload 每用户保留条数。",
     )
     parser.add_argument(
         "--redis-report-json",
         default="",
-        help="P7 写回报告路径；为空时默认输出到 two_tower/reports。",
+        help="写回报告路径；为空时默认输出到 two_tower/reports。",
     )
     parser.add_argument(
         "--env-file",
         default=".env",
-        help="P7 环境变量文件路径（用于 MySQL/Redis 连接）。",
+        help="环境变量文件路径（用于 MySQL/Redis 连接）。",
+    )
+    parser.add_argument(
+        "--allow-external-paths",
+        action="store_true",
+        help="允许使用工作区外绝对路径（默认关闭以避免跨宿主机路径失效）。",
     )
     return parser
 
 
-def run_pipeline(config: dict[str, Any], config_path: Path, args: argparse.Namespace):
-    _ensure_runtime_paths()
-
-    from evaluation.two_tower.offline_eval import evaluate_two_tower_ranked_results
-    from inference.two_tower.rank_scoring import build_two_tower_topk_from_embeddings
-    from inference.writers.redis_writeback import write_content_based_ranked_to_redis
+def run_pipeline(
+    config: dict[str, Any],
+    config_path: Path,
+    args: argparse.Namespace,
+    *,
+    allow_external_paths: bool,
+):
+    from evaluation.two_tower.offline_eval import (
+        evaluate_two_tower_ranked_results,
+    )
+    from inference.two_tower.rank_scoring import (
+        build_two_tower_topk_from_embeddings,
+    )
 
     output_cfg = dict(config.get("output") or {})
     p3_cfg = dict(config.get("p3") or {})
 
-    artifacts_root = _resolve_workspace_path(
-        str(output_cfg.get("artifacts_root") or "recsys/artifacts/two_tower")
+    artifacts_root = resolve_workspace_path(
+        str(output_cfg.get("artifacts_root") or "recsys/artifacts/two_tower"),
+        workspace_root=WORKSPACE_ROOT,
+        allow_external_paths=allow_external_paths,
     )
-    datasets_dir = _resolve_workspace_path(
-        str(output_cfg.get("datasets_dir") or "recsys/artifacts/two_tower/datasets")
+    datasets_dir = resolve_workspace_path(
+        str(output_cfg.get("datasets_dir") or "recsys/artifacts/two_tower/datasets"),
+        workspace_root=WORKSPACE_ROOT,
+        allow_external_paths=allow_external_paths,
     )
-    reports_dir = _resolve_workspace_path(
-        str(output_cfg.get("reports_dir") or "recsys/artifacts/two_tower/reports")
+    reports_dir = resolve_workspace_path(
+        str(output_cfg.get("reports_dir") or "recsys/artifacts/two_tower/reports"),
+        workspace_root=WORKSPACE_ROOT,
+        allow_external_paths=allow_external_paths,
     )
 
     interactions_train_jsonl = datasets_dir / "interactions_train.jsonl"
     interactions_test_jsonl = datasets_dir / "interactions_test.jsonl"
     if not interactions_train_jsonl.exists() or not interactions_test_jsonl.exists():
         raise RuntimeError(
-            "缺少 P1 产物 interactions_train/test.jsonl，请先执行 train.py"
+            "缺少 interactions_train/test.jsonl，请先执行训练入口生成样本。"
         )
 
     p4_artifacts = _resolve_p4_artifacts(
         artifacts_root=artifacts_root,
         reports_dir=reports_dir,
         run_id=args.run_id.strip() or None,
+        allow_external_paths=allow_external_paths,
     )
 
     ranked_dir = artifacts_root / "ranked"
@@ -245,6 +303,7 @@ def run_pipeline(config: dict[str, Any], config_path: Path, args: argparse.Names
         output_jsonl=ranked_jsonl,
         top_k_items=int(args.top_k_items),
         score_batch_size=int(args.score_batch_size),
+        item_block_size=int(args.item_block_size),
         device=str(args.device),
     )
 
@@ -271,8 +330,16 @@ def run_pipeline(config: dict[str, Any], config_path: Path, args: argparse.Names
     }
 
     if args.write_redis:
+        from inference.writers.redis_writeback import (
+            write_content_based_ranked_to_redis,
+        )
+
         redis_report_json = (
-            _resolve_workspace_path(str(args.redis_report_json))
+            resolve_workspace_path(
+                str(args.redis_report_json),
+                workspace_root=WORKSPACE_ROOT,
+                allow_external_paths=allow_external_paths,
+            )
             if str(args.redis_report_json).strip()
             else reports_dir / "two_tower_redis_report.json"
         )
@@ -280,7 +347,11 @@ def run_pipeline(config: dict[str, Any], config_path: Path, args: argparse.Names
         p7_summary = write_content_based_ranked_to_redis(
             ranked_jsonl=ranked_jsonl,
             report_json=redis_report_json,
-            env_file=_resolve_workspace_path(str(args.env_file)),
+            env_file=resolve_workspace_path(
+                str(args.env_file),
+                workspace_root=WORKSPACE_ROOT,
+                allow_external_paths=allow_external_paths,
+            ),
             key_version=int(args.key_version),
             ttl_seconds=int(args.ttl_seconds),
             max_items=int(args.redis_max_items),
@@ -297,10 +368,25 @@ def main() -> None:
     parser = build_argument_parser()
     args = parser.parse_args()
 
-    config_path = _resolve_existing_path(str(args.config))
+    config_path = resolve_existing_config_path(
+        str(args.config),
+        workspace_root=WORKSPACE_ROOT,
+        recsys_root=RECSYS_ROOT,
+        allow_external_paths=True,
+    )
     config = _load_json(config_path)
 
-    summary = run_pipeline(config=config, config_path=config_path, args=args)
+    pipeline_cfg = dict(config.get("pipeline") or {})
+    allow_external_paths = bool(args.allow_external_paths) or _to_bool(
+        pipeline_cfg.get("allow_external_paths", False)
+    )
+
+    summary = run_pipeline(
+        config=config,
+        config_path=config_path,
+        args=args,
+        allow_external_paths=allow_external_paths,
+    )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
