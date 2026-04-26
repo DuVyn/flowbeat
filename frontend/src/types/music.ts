@@ -71,6 +71,24 @@ export interface PersonalizedRecommendationsResponse {
   items: Track[]
 }
 
+/** 歌曲搜索分页响应 DTO */
+export interface SongSearchResponseDto {
+  query: string
+  limit: number
+  offset: number
+  has_more: boolean
+  items: TrackDto[]
+}
+
+/** 前端可直接使用的歌曲搜索分页响应 */
+export interface SongSearchResponse {
+  query: string
+  limit: number
+  offset: number
+  hasMore: boolean
+  items: Track[]
+}
+
 /** 单曲详情 DTO */
 export interface SongDetailResponseDto extends TrackDto {
   language: number | null

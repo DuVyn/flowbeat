@@ -1,4 +1,5 @@
 import { requestJson } from '@/api/http'
+import { dedup } from '@/utils/dedup'
 import type {
   PlayHistoryItem,
   PlayHistoryItemDto,
@@ -29,19 +30,22 @@ export async function recordPlayHistory(songId: number): Promise<void> {
 }
 
 export async function getPlayHistory(limit = 20, offset = 0): Promise<PlayHistoryResponse> {
-  const params = new URLSearchParams({
-    limit: String(limit),
-    offset: String(offset),
-  })
+  const key = `history:${limit}:${offset}`
+  return dedup(key, async () => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    })
 
-  const dto = await requestJson<PlayHistoryResponseDto>(`/api/me/history?${params.toString()}`, {
-    method: 'GET',
-  })
+    const dto = await requestJson<PlayHistoryResponseDto>(`/api/me/history?${params.toString()}`, {
+      method: 'GET',
+    })
 
-  return {
-    limit: dto.limit,
-    offset: dto.offset,
-    hasMore: dto.has_more,
-    items: dto.items.map(mapPlayHistoryItemDto),
-  }
+    return {
+      limit: dto.limit,
+      offset: dto.offset,
+      hasMore: dto.has_more,
+      items: dto.items.map(mapPlayHistoryItemDto),
+    }
+  })
 }

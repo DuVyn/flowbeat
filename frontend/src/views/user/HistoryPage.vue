@@ -3,6 +3,7 @@
  * HistoryPage — 用户历史播放页
  *
  * 展示当前用户最近播放历史，支持滚动触底自动加载与点击回放。
+ * 使用模块级缓存避免重复请求，切换页面再回来时直接使用缓存数据。
  */
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -13,10 +14,12 @@ import { HttpError } from '@/api/http'
 import MusicList from '@/components/music/MusicList.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePlayerStore } from '@/stores/player'
+import { throttle } from '@/utils/throttle'
 import type { PlayHistoryItem, Track } from '@/types/music'
 
 const PAGE_SIZE = 20
 const BOTTOM_THRESHOLD_PX = 120
+const CACHE_TTL_MS = 2 * 60 * 1000 // 2 分钟（历史数据变化较快）
 
 const router = useRouter()
 const route = useRoute()
@@ -29,6 +32,15 @@ const loadingMore = ref(false)
 const loadError = ref('')
 const hasMore = ref(false)
 const scrollContainer = ref<HTMLElement | null>(null)
+
+/** 模块级缓存 */
+interface HistoryCache {
+  tracks: PlayHistoryItem[]
+  hasMore: boolean
+  timestamp: number
+}
+
+let pageCache: HistoryCache | null = null
 
 const latestPlayedAtLabel = computed(() => {
   const latestTrack = tracks.value[0]
@@ -64,6 +76,13 @@ async function loadHistory(reset = false): Promise<void> {
     hasMore.value = response.hasMore
     tracks.value = reset ? response.items : [...tracks.value, ...response.items]
     loadError.value = ''
+
+    // 更新缓存
+    pageCache = {
+      tracks: [...tracks.value],
+      hasMore: hasMore.value,
+      timestamp: Date.now(),
+    }
   } catch (error) {
     if (error instanceof HttpError && error.status === 401) {
       authStore.clearSession()
@@ -108,9 +127,9 @@ function tryLoadMoreIfNeeded(): void {
   }
 }
 
-function handleScroll(): void {
+const handleScroll = throttle((): void => {
   tryLoadMoreIfNeeded()
-}
+}, 200)
 
 function bindScrollContainer(): void {
   const container = document.querySelector('.main-layout__scroll')
@@ -135,6 +154,15 @@ function handlePlay(track: Track): void {
 
 onMounted(() => {
   bindScrollContainer()
+
+  // 如果缓存有效，直接使用缓存数据
+  if (pageCache && Date.now() - pageCache.timestamp < CACHE_TTL_MS) {
+    tracks.value = pageCache.tracks
+    hasMore.value = pageCache.hasMore
+    loading.value = false
+    return
+  }
+
   void loadHistory(true)
 })
 

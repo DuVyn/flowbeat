@@ -10,9 +10,11 @@
  *   - index: 在列表中的序号（从 1 开始）
  */
 
+import { computed } from 'vue'
 import type { Track } from '@/types/music'
-import mockCover from '@/assets/images/mock-cover-sunny.png'
+import mockCover from '@/assets/images/default-cover.svg'
 import { formatDuration } from '@/utils/TimeFormat'
+import { useCoverStore } from '@/stores/cover'
 
 const props = defineProps<{
   /** 歌曲数据 */
@@ -26,12 +28,18 @@ const emit = defineEmits<{
   (e: 'play', track: Track): void
 }>()
 
+const coverStore = useCoverStore()
+
+const coverUrl = computed(() => {
+  const cached = coverStore.getCoverUrl(props.track.id)
+  if (cached) return cached
+  const raw = props.track.coverUrl?.trim()
+  if (raw) return raw
+  return mockCover
+})
+
 function handlePlay() {
   emit('play', props.track)
-}
-
-function resolveCoverUrl(rawUrl: string): string {
-  return rawUrl.trim() ? rawUrl : mockCover
 }
 </script>
 
@@ -50,9 +58,11 @@ function resolveCoverUrl(rawUrl: string): string {
       <div class="music-list-item__cover-wrapper">
         <img
           class="music-list-item__cover"
-          :src="resolveCoverUrl(track.coverUrl)"
+          :src="coverUrl"
           :alt="`${track.album} 封面`"
           loading="lazy"
+          width="44"
+          height="44"
         />
         <!-- 悬停播放按钮 -->
         <div class="music-list-item__play-overlay">

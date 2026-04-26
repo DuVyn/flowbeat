@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -64,7 +65,16 @@ def build_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="允许使用工作区外绝对路径（默认关闭以避免跨宿主机路径失效）。",
     )
+    parser.add_argument(
+        "--resume-run-id",
+        default="",
+        help="可选：指定续训的 run_id；传入后将强制启用 resume。",
+    )
     return parser
+
+
+def _log(message: str) -> None:
+    print(f"[train] {message}", flush=True)
 
 
 def run_pipeline(
@@ -72,6 +82,7 @@ def run_pipeline(
     config_path: Path,
     *,
     allow_external_paths: bool,
+    resume_run_id: str,
 ) -> dict[str, Any]:
     """执行训练流水线并返回结构化摘要。"""
     from datasets.two_tower.build_interactions import (
@@ -169,7 +180,11 @@ def run_pipeline(
         }
     }
 
+    _log("开始执行训练流水线：" + ", ".join(stage.upper() for stage in stages))
+
     if "p0" in stages:
+        stage_begin = time.perf_counter()
+        _log("P0 开始：数据契约冻结与校验。")
         schema_path = resolve_workspace_path(
             str(p0_cfg.get("schema_json") or "recsys/configs/two_tower/schema_v1.json"),
             workspace_root=WORKSPACE_ROOT,
@@ -202,8 +217,14 @@ def run_pipeline(
             output_json=reports_dir / "p0_data_contract_report.json",
         )
         summaries["p0"] = asdict(p0_summary)
+        _log(
+            f"P0 完成，用时 {time.perf_counter() - stage_begin:.1f}s，"
+            f"报告: {reports_dir / 'p0_data_contract_report.json'}"
+        )
 
     if "p1" in stages:
+        stage_begin = time.perf_counter()
+        _log("P1 开始：构建交互样本。")
         sample_limit_value = p1_cfg.get("sample_limit", 200_000)
         sample_limit = None if sample_limit_value is None else int(sample_limit_value)
 
@@ -225,8 +246,14 @@ def run_pipeline(
             sample_limit=sample_limit,
         )
         summaries["p1"] = asdict(p1_summary)
+        _log(
+            f"P1 完成，用时 {time.perf_counter() - stage_begin:.1f}s，"
+            f"train/valid/test={p1_summary.train_rows}/{p1_summary.valid_rows}/{p1_summary.test_rows}"
+        )
 
     if "p2" in stages:
+        stage_begin = time.perf_counter()
+        _log("P2 开始：构建用户/歌曲特征。")
         p2_summary = build_two_tower_features(
             users_csv=input_paths["users_csv"],
             songs_csv=input_paths["songs_csv"],
@@ -246,9 +273,21 @@ def run_pipeline(
             ],
         )
         summaries["p2"] = asdict(p2_summary)
+        _log(
+            f"P2 完成，用时 {time.perf_counter() - stage_begin:.1f}s，"
+            f"user_features={user_features_jsonl.name} item_features={item_features_jsonl.name}"
+        )
 
     p3_summary = None
     if "p3" in stages or "p4" in stages:
+        training_config = dict(p4_cfg.get("training") or p3_cfg.get("training") or {})
+        resume_enabled = _to_bool(training_config.get("resume", False))
+        resume_run_id_text = resume_run_id.strip()
+        if resume_run_id_text:
+            resume_enabled = True
+
+        stage_begin = time.perf_counter()
+        _log("P3 开始：准备训练运行上下文。")
         p3_summary = prepare_two_tower_run_context(
             config=config,
             config_path=config_path,
@@ -264,15 +303,27 @@ def run_pipeline(
                 "feature_dictionaries": feature_dict_json,
             },
             context_report_json=reports_dir / "p3_run_context_report.json",
+            resume=resume_enabled,
+            resume_run_id=resume_run_id_text or None,
         )
         if "p3" in stages:
             summaries["p3"] = asdict(p3_summary)
+        _log(
+            f"P3 完成，用时 {time.perf_counter() - stage_begin:.1f}s，"
+            f"run_id={p3_summary.run_id}"
+        )
 
     if "p4" in stages:
         if p3_summary is None:
             raise RuntimeError("执行训练前必须先准备运行上下文。")
 
         training_config = dict(p4_cfg.get("training") or p3_cfg.get("training") or {})
+        resume_run_id_text = resume_run_id.strip()
+        if resume_run_id_text:
+            training_config["resume"] = True
+
+        stage_begin = time.perf_counter()
+        _log("P4 开始：模型训练与向量导出。")
         p4_summary = train_two_tower_local_mvp(
             interactions_train_jsonl=train_jsonl,
             interactions_valid_jsonl=valid_jsonl,
@@ -282,6 +333,12 @@ def run_pipeline(
             seed=int(pipeline_cfg.get("seed", 20260410)),
         )
         summaries["p4"] = asdict(p4_summary)
+        _log(
+            f"P4 完成，用时 {time.perf_counter() - stage_begin:.1f}s，"
+            f"best_epoch={p4_summary.best_epoch} best_valid_loss={p4_summary.best_valid_loss}"
+        )
+
+    _log("训练流水线执行结束。")
 
     return summaries
 
@@ -304,11 +361,17 @@ def main() -> None:
         pipeline_cfg.get("allow_external_paths", False)
     )
 
-    summary = run_pipeline(
-        config=config,
-        config_path=config_path,
-        allow_external_paths=allow_external_paths,
-    )
+    try:
+        summary = run_pipeline(
+            config=config,
+            config_path=config_path,
+            allow_external_paths=allow_external_paths,
+            resume_run_id=str(args.resume_run_id or ""),
+        )
+    except KeyboardInterrupt:
+        _log("检测到 Ctrl+C，训练已中断。若已启用 resume，下次可从 checkpoint 继续。")
+        raise SystemExit(130)
+
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 

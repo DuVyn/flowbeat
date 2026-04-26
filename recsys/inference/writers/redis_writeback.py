@@ -26,7 +26,7 @@ class RedisWritebackSummary:
     skipped_invalid_rows: int
     failed_writes: int
     key_version: int
-    ttl_seconds: int
+    ttl_seconds: int | None
     report_path: str
 
 
@@ -138,7 +138,7 @@ def write_content_based_ranked_to_redis(
     report_json: Path,
     env_file: Path,
     key_version: int = 1,
-    ttl_seconds: int = 86_400,
+    ttl_seconds: int | None = None,
     max_items: int = 100,
     batch_size: int = 500,
     dry_run: bool = False,
@@ -147,12 +147,15 @@ def write_content_based_ranked_to_redis(
     """将排序产物写入 Redis 并输出写回报告。"""
     if key_version <= 0:
         raise ValueError("key_version 必须大于 0")
-    if ttl_seconds <= 0:
-        raise ValueError("ttl_seconds 必须大于 0")
     if max_items <= 0:
         raise ValueError("max_items 必须大于 0")
     if batch_size <= 0:
         raise ValueError("batch_size 必须大于 0")
+
+    # 固定采用持久化写入（永不过期），直到下一次写入覆盖同名 key。
+    # 保留 ttl_seconds 参数仅用于兼容旧调用，不再生效。
+    _ = ttl_seconds
+    effective_ttl_seconds: int | None = None
 
     _load_env_file(env_file)
     user_id_map = _load_user_id_map()
@@ -183,7 +186,7 @@ def write_content_based_ranked_to_redis(
 
         pipeline = redis_client.pipeline(transaction=False)
         for key, payload_text in pending:
-            pipeline.setex(key, ttl_seconds, payload_text)
+            pipeline.set(key, payload_text)
 
         try:
             pipeline.execute()
@@ -196,7 +199,7 @@ def write_content_based_ranked_to_redis(
 
         for key, payload_text in pending:
             try:
-                redis_client.setex(key, ttl_seconds, payload_text)
+                redis_client.set(key, payload_text)
                 written_keys += 1
             except Exception:
                 failed_writes += 1
@@ -255,7 +258,7 @@ def write_content_based_ranked_to_redis(
         "input": {"ranked_jsonl": str(ranked_jsonl)},
         "settings": {
             "key_version": key_version,
-            "ttl_seconds": ttl_seconds,
+            "ttl_seconds": effective_ttl_seconds,
             "max_items": max_items,
             "batch_size": batch_size,
             "dry_run": dry_run,
@@ -287,7 +290,7 @@ def write_content_based_ranked_to_redis(
         skipped_invalid_rows=skipped_invalid_rows,
         failed_writes=failed_writes,
         key_version=key_version,
-        ttl_seconds=ttl_seconds,
+        ttl_seconds=effective_ttl_seconds,
         report_path=str(report_json),
     )
 

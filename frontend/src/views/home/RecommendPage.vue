@@ -3,6 +3,7 @@
  * RecommendPage — 个性推荐主页面
  *
  * 展示个性化推荐结果，并标注当前命中的推荐策略。
+ * 使用模块级缓存避免重复请求，切换页面再回来时直接使用缓存数据。
  */
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -13,10 +14,12 @@ import { HttpError } from '@/api/http'
 import MusicList from '@/components/music/MusicList.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePlayerStore } from '@/stores/player'
+import { throttle } from '@/utils/throttle'
 import type { RecommendationStrategy, Track } from '@/types/music'
 
 const PAGE_SIZE = 20
 const BOTTOM_THRESHOLD_PX = 120
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 分钟
 
 const router = useRouter()
 const route = useRoute()
@@ -30,6 +33,16 @@ const loading = ref(true)
 const loadingMore = ref(false)
 const loadError = ref('')
 const scrollContainer = ref<HTMLElement | null>(null)
+
+/** 模块级缓存 */
+interface RecommendCache {
+  tracks: Track[]
+  strategy: RecommendationStrategy | null
+  total: number
+  timestamp: number
+}
+
+let pageCache: RecommendCache | null = null
 
 const strategyLabelMap: Record<RecommendationStrategy, string> = {
   two_tower: '双塔个性化',
@@ -97,6 +110,14 @@ async function loadRecommendations(reset = false): Promise<void> {
     total.value = response.total
     tracks.value = reset ? response.items : [...tracks.value, ...response.items]
     loadError.value = ''
+
+    // 更新缓存
+    pageCache = {
+      tracks: [...tracks.value],
+      strategy: strategy.value,
+      total: total.value,
+      timestamp: Date.now(),
+    }
   } catch (error) {
     if (error instanceof HttpError && error.status === 401) {
       authStore.clearSession()
@@ -143,9 +164,9 @@ function tryLoadMoreIfNeeded(): void {
   }
 }
 
-function handleScroll(): void {
+const handleScroll = throttle((): void => {
   tryLoadMoreIfNeeded()
-}
+}, 200)
 
 function bindScrollContainer(): void {
   const container = document.querySelector('.main-layout__scroll')
@@ -169,11 +190,22 @@ function handlePlay(track: Track): void {
 }
 
 function refreshRecommendations(): void {
+  pageCache = null
   void loadRecommendations(true)
 }
 
 onMounted(() => {
   bindScrollContainer()
+
+  // 如果缓存有效，直接使用缓存数据
+  if (pageCache && Date.now() - pageCache.timestamp < CACHE_TTL_MS) {
+    tracks.value = pageCache.tracks
+    strategy.value = pageCache.strategy
+    total.value = pageCache.total
+    loading.value = false
+    return
+  }
+
   void loadRecommendations(true)
 })
 

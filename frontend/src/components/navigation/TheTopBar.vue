@@ -9,13 +9,14 @@
  *   3. 用户头像与个人中心入口（含下拉菜单）
  */
 
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { logout } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 authStore.hydrateFromStorage()
 
@@ -30,11 +31,37 @@ const userAvatarText = computed(() => {
 /* ---- 搜索 ---- */
 const searchQuery = ref('')
 
+function readSearchQueryFromRoute(): string {
+  const rawQuery = route.query.q
+  if (Array.isArray(rawQuery)) {
+    return String(rawQuery[0] ?? '').trim()
+  }
+  return typeof rawQuery === 'string' ? rawQuery.trim() : ''
+}
+
+function syncSearchInputFromRoute(): void {
+  if (route.name !== 'Search') {
+    return
+  }
+  searchQuery.value = readSearchQueryFromRoute()
+}
+
 function handleSearch() {
   const query = searchQuery.value.trim()
   if (!query) return
-  console.log('[Mock] 搜索:', query)
+  void router.push({
+    name: 'Search',
+    query: { q: query },
+  })
 }
+
+watch(
+  () => [route.name, route.query.q],
+  () => {
+    syncSearchInputFromRoute()
+  },
+  { immediate: true },
+)
 
 /* ---- 路由导航 ---- */
 function goBack() {

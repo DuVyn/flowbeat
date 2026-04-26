@@ -16,6 +16,7 @@ from app.schemas.music import (
     RecordPlayHistoryRequest,
     RecordPlayHistoryResponse,
 )
+from app.services.track_mapper import to_track_response
 
 
 class PlayHistoryService:
@@ -78,15 +79,16 @@ class PlayHistoryService:
 
         items: list[PlayHistoryItemResponse] = []
         for played_at, song_pk, song_id, song_name, artist_name, song_length in rows:
+            base_track = to_track_response(
+                song_pk=int(song_pk),
+                song_id=str(song_id),
+                name=song_name,
+                artist_name=artist_name,
+                song_length=song_length,
+            )
             items.append(
                 PlayHistoryItemResponse(
-                    id=song_pk,
-                    song_id=song_id,
-                    name=song_name or song_id,
-                    artist=artist_name or "未知艺术家",
-                    album="未知专辑",
-                    cover_url="",
-                    duration_ms=song_length or 0,
+                    **base_track.model_dump(),
                     played_at=played_at,
                 )
             )

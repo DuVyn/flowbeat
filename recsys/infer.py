@@ -210,8 +210,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--ttl-seconds",
         type=int,
-        default=86_400,
-        help="Redis 过期时间（秒）。",
+        default=0,
+        help="兼容保留参数，当前固定永不过期（该参数不生效）。",
     )
     parser.add_argument(
         "--redis-batch-size",
@@ -353,7 +353,6 @@ def run_pipeline(
                 allow_external_paths=allow_external_paths,
             ),
             key_version=int(args.key_version),
-            ttl_seconds=int(args.ttl_seconds),
             max_items=int(args.redis_max_items),
             batch_size=int(args.redis_batch_size),
             dry_run=bool(args.dry_run),

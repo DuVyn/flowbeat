@@ -38,6 +38,63 @@ def _prepare_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def _resolve_resume_run_dir(
+    *,
+    artifacts_root: Path,
+    context_report_json: Path,
+    experiment_name: str,
+    resume: bool,
+    resume_run_id: str | None,
+) -> Path | None:
+    """解析断点续训目标 run 目录。"""
+    runs_root = artifacts_root / "runs"
+
+    if resume_run_id:
+        run_dir = (runs_root / resume_run_id.strip()).resolve()
+        if not run_dir.exists():
+            raise FileNotFoundError(f"指定的 resume_run_id 不存在: {run_dir}")
+        return run_dir
+
+    if not resume:
+        return None
+
+    # 优先复用最近一次上下文报告中的 run_dir。
+    if context_report_json.exists():
+        try:
+            report = json.loads(context_report_json.read_text(encoding="utf-8"))
+            summary = dict(report.get("summary") or {})
+            report_experiment = str(summary.get("experiment_name") or "").strip()
+            run_dir_text = str(summary.get("run_dir") or "").strip()
+            if report_experiment == experiment_name and run_dir_text:
+                run_dir = Path(run_dir_text).expanduser()
+                if not run_dir.is_absolute():
+                    run_dir = (runs_root / run_dir).resolve()
+                else:
+                    run_dir = run_dir.resolve()
+                if run_dir.exists():
+                    return run_dir
+        except Exception:
+            # 上下文报告损坏时继续回退到目录扫描策略。
+            pass
+
+    # 回退：按实验名前缀选择最新且存在 checkpoint 的目录。
+    if not runs_root.exists():
+        return None
+
+    prefix = f"{experiment_name}_"
+    candidates = [
+        path
+        for path in runs_root.iterdir()
+        if path.is_dir() and path.name.startswith(prefix)
+    ]
+    candidates.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    for candidate in candidates:
+        if (candidate / "checkpoints" / "last_model.pt").exists():
+            return candidate.resolve()
+
+    return None
+
+
 def prepare_two_tower_run_context(
     *,
     config: dict[str, Any],
@@ -46,6 +103,8 @@ def prepare_two_tower_run_context(
     dataset_paths: dict[str, Path],
     feature_paths: dict[str, Path],
     context_report_json: Path,
+    resume: bool = False,
+    resume_run_id: str | None = None,
 ) -> TwoTowerRunContextSummary:
     """根据训练配置生成 run_id、配置快照与日志模板。"""
     pipeline_config = dict(config.get("pipeline") or {})
@@ -58,9 +117,22 @@ def prepare_two_tower_run_context(
 
     config_hash = _json_hash(config)
     utc_now = datetime.now(timezone.utc)
-    run_id = f"{experiment_name}_{utc_now.strftime('%Y%m%d_%H%M%S')}"
+    resume_dir = _resolve_resume_run_dir(
+        artifacts_root=artifacts_root,
+        context_report_json=context_report_json,
+        experiment_name=experiment_name,
+        resume=resume,
+        resume_run_id=resume_run_id,
+    )
+    if resume_dir is None:
+        run_id = f"{experiment_name}_{utc_now.strftime('%Y%m%d_%H%M%S')}"
+        run_dir = artifacts_root / "runs" / run_id
+        resumed_from = None
+    else:
+        run_dir = resume_dir
+        run_id = run_dir.name
+        resumed_from = run_id
 
-    run_dir = artifacts_root / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
     snapshot = {
@@ -112,6 +184,8 @@ def prepare_two_tower_run_context(
             "seed": seed,
             "config_hash": config_hash,
             "run_dir": str(run_dir),
+            "resume": bool(resume),
+            "resumed_from": resumed_from,
         },
         "artifacts": {
             "config_snapshot": str(snapshot_path),

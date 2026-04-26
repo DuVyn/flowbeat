@@ -3,6 +3,7 @@
  * HomePage — 首页/推荐页
  *
  * 展示后端返回的全局热门推荐列表。
+ * 使用模块级缓存避免重复请求：切换页面再回来时直接使用缓存数据。
  */
 
 import { onMounted, ref } from 'vue'
@@ -17,19 +18,37 @@ const tracks = ref<Track[]>([])
 const loading = ref(true)
 const loadError = ref('')
 
-async function loadHotRecommendations() {
+/** 模块级缓存：跨路由切换保持数据 */
+let cachedTracks: Track[] | null = null
+let cacheTimestamp = 0
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 分钟
+
+async function loadHotRecommendations(force = false) {
+  // 如果缓存有效且不是强制刷新，直接使用缓存
+  if (!force && cachedTracks && Date.now() - cacheTimestamp < CACHE_TTL_MS) {
+    tracks.value = cachedTracks
+    loading.value = false
+    return
+  }
+
   loading.value = true
   loadError.value = ''
 
   try {
     const response = await getHotRecommendations(20, 0)
     tracks.value = response.items
+    cachedTracks = response.items
+    cacheTimestamp = Date.now()
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : '推荐加载失败，请稍后重试'
     tracks.value = []
   } finally {
     loading.value = false
   }
+}
+
+function handleRetry() {
+  void loadHotRecommendations(true)
 }
 
 function handlePlay(track: Track) {
@@ -51,7 +70,7 @@ onMounted(() => {
 
     <div v-if="loadError" class="home-page__error">
       <span>{{ loadError }}</span>
-      <button class="home-page__retry" @click="loadHotRecommendations">重试</button>
+      <button class="home-page__retry" @click="handleRetry">重试</button>
     </div>
 
     <!-- 推荐歌曲列表 -->

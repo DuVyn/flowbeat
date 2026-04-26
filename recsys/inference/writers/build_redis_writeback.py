@@ -83,8 +83,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--ttl-seconds",
         type=int,
-        default=86_400,
-        help="Redis 过期时间（秒）。",
+        default=0,
+        help="兼容保留参数，当前固定永不过期（该参数不生效）。",
     )
     parser.add_argument(
         "--max-items",
@@ -161,7 +161,6 @@ def main() -> None:
             allow_external_paths=allow_external_paths,
         ),
         key_version=key_version,
-        ttl_seconds=args.ttl_seconds,
         max_items=args.max_items,
         batch_size=args.batch_size,
         dry_run=args.dry_run,

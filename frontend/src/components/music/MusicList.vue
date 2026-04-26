@@ -15,10 +15,12 @@
  *   - loading: 是否加载中
  */
 
+import { ref, watch } from 'vue'
 import type { Track } from '@/types/music'
 import MusicListItem from './MusicListItem.vue'
+import { useCoverStore } from '@/stores/cover'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     /** 歌曲数据列表 */
     tracks: Track[]
@@ -37,6 +39,33 @@ const emit = defineEmits<{
   /** 点击播放某首歌 */
   (e: 'play', track: Track): void
 }>()
+
+const coverStore = useCoverStore()
+
+/**
+ * 首次加载标记：从 loading → 有数据的首次渲染跳过 TransitionGroup 动画，
+ * 避免 20+ 项同时执行进入动画阻塞首屏感知。
+ */
+const initialRender = ref(true)
+
+watch(
+  () => props.tracks,
+  (newTracks) => {
+    if (newTracks.length > 0) {
+      // 批量解析封面
+      const ids = newTracks.map((t) => t.id)
+      void coverStore.resolveCovers(ids)
+
+      // 首次有数据后，下一帧恢复动画
+      if (initialRender.value) {
+        requestAnimationFrame(() => {
+          initialRender.value = false
+        })
+      }
+    }
+  },
+  { immediate: true },
+)
 
 function handlePlay(track: Track) {
   emit('play', track)
@@ -114,7 +143,7 @@ function handlePlay(track: Track) {
     <!-- 歌曲列表 -->
     <TransitionGroup
       v-else
-      name="list"
+      :name="initialRender ? '' : 'list'"
       tag="div"
       class="music-list__body"
       role="rowgroup"

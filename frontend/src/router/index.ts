@@ -59,7 +59,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/user/HistoryPage.vue'),
         meta: { title: '历史播放', requiresAuth: true },
       },
-      // TODO: 后续在此追加 category / search / player 等业务页面
+      {
+        path: 'search',
+        name: 'Search',
+        component: () => import('@/views/search/SearchPage.vue'),
+        meta: { title: '搜索', requiresAuth: true },
+      },
+      // TODO: 后续在此追加 category / player 等业务页面
     ],
   },
 

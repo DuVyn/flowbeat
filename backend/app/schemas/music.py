@@ -62,6 +62,32 @@ class PersonalizedRecommendationsResponse(BaseModel):
     items: list[TrackResponse]
 
 
+class SongSearchResponse(BaseModel):
+    """歌曲搜索分页响应。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: str
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+    has_more: bool
+    items: list[TrackResponse]
+
+
+class SongCoversRequest(BaseModel):
+    """批量封面地址请求。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    song_ids: list[int] = Field(min_length=1, max_length=100)
+
+
+class SongCoversResponse(BaseModel):
+    """批量封面地址响应。"""
+
+    covers: dict[int, str]
+
+
 class RecordPlayHistoryRequest(BaseModel):
     """记录播放历史请求。"""
 

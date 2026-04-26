@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import random
+import time
 import warnings
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from functools import partial
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -208,6 +211,10 @@ def _parse_optional_int(value: Any) -> int | None:
     return parsed
 
 
+def _log_train(message: str) -> None:
+    print(f"[P4] {message}", flush=True)
+
+
 def _map_row_to_sample(
     *,
     row: dict[str, Any],
@@ -383,13 +390,11 @@ def _resolve_resume_checkpoint(run_dir: Path, resume_from: str) -> Path:
     return (run_dir / user_path).resolve()
 
 
-def _worker_init_factory(seed: int):
-    def _worker_init(worker_id: int) -> None:
-        worker_seed = seed + worker_id
-        random.seed(worker_seed)
-        torch.manual_seed(worker_seed)
-
-    return _worker_init
+def _worker_init_fn(worker_id: int, *, base_seed: int) -> None:
+    """为 DataLoader worker 设置可复现随机种子。"""
+    worker_seed = base_seed + worker_id
+    random.seed(worker_seed)
+    torch.manual_seed(worker_seed)
 
 
 def _resolve_dataloader_options(
@@ -439,7 +444,7 @@ def _resolve_dataloader_options(
     if prefetch_factor is not None:
         options["prefetch_factor"] = prefetch_factor
     if num_workers > 0:
-        options["worker_init_fn"] = _worker_init_factory(seed)
+        options["worker_init_fn"] = partial(_worker_init_fn, base_seed=seed)
 
     summary = {
         "num_workers": num_workers,
@@ -488,6 +493,7 @@ def train_two_tower_local_mvp(
     seed: int,
 ) -> TwoTowerTrainingSummary:
     """训练双塔模型并导出检查点与向量产物。"""
+    training_start_ts = time.perf_counter()
     _set_seed(seed)
 
     embedding_dim = int(training_config.get("embedding_dim", 64))
@@ -509,13 +515,24 @@ def train_two_tower_local_mvp(
     shuffle_buffer_size = int(training_config.get("shuffle_buffer_size", 20_000))
     shuffle_buffer_size = max(1, shuffle_buffer_size)
 
-    resume = _to_bool(training_config.get("resume"), default=False)
+    resume_requested = _to_bool(training_config.get("resume"), default=False)
+    resume = resume_requested
     resume_from = str(training_config.get("resume_from") or "last")
+    log_every_steps = int(training_config.get("log_every_steps", 200))
+    log_every_steps = max(1, log_every_steps)
 
     if batch_size <= 0:
         raise ValueError("batch_size 必须 > 0")
     if epochs <= 0:
         raise ValueError("epochs 必须 > 0")
+
+    _log_train(
+        "训练参数："
+        f"embedding_dim={embedding_dim}, hidden_dims={hidden_dims}, "
+        f"batch_size={batch_size}, epochs={epochs}, lr={learning_rate}, "
+        f"weight_decay={weight_decay}, device={requested_device}, "
+        f"resume={resume}, resume_from={resume_from}, log_every_steps={log_every_steps}"
+    )
 
     device = _resolve_device(requested_device)
     loader_options, loader_settings_summary = _resolve_dataloader_options(
@@ -546,6 +563,22 @@ def train_two_tower_local_mvp(
         raise ValueError("训练集为空，无法执行训练。")
     if valid_samples <= 0:
         raise ValueError("验证集为空，无法执行训练。")
+
+    estimated_train_steps = max(1, math.ceil(train_samples / batch_size))
+    estimated_valid_steps = max(1, math.ceil(valid_samples / batch_size))
+    _log_train(
+        "样本统计："
+        f"train_samples={train_samples}, valid_samples={valid_samples}, "
+        f"train_invalid_rows={train_invalid_rows}, valid_invalid_rows={valid_invalid_rows}, "
+        f"estimated_steps(train/valid)={estimated_train_steps}/{estimated_valid_steps}"
+    )
+    _log_train(
+        "DataLoader："
+        f"num_workers={loader_settings_summary['num_workers']}, "
+        f"pin_memory={loader_settings_summary['pin_memory']}, "
+        f"persistent_workers={loader_settings_summary['persistent_workers']}, "
+        f"prefetch_factor={loader_settings_summary['prefetch_factor']}"
+    )
 
     train_dataset = InteractionIterableDataset(
         path=interactions_train_jsonl,
@@ -604,59 +637,89 @@ def train_two_tower_local_mvp(
     if resume:
         resume_checkpoint = _resolve_resume_checkpoint(run_dir, resume_from)
         if not resume_checkpoint.exists():
-            raise FileNotFoundError(
-                f"断点续训失败，checkpoint 不存在: {resume_checkpoint}"
+            resume = False
+            _log_train(
+                f"未找到可用 checkpoint: {resume_checkpoint}，将自动从头开始训练。"
             )
-
-        checkpoint = torch.load(resume_checkpoint, map_location="cpu")
-        checkpoint_user_to_idx = checkpoint.get("user_to_idx")
-        checkpoint_item_to_idx = checkpoint.get("item_to_idx")
-        if (
-            checkpoint_user_to_idx != user_to_idx
-            or checkpoint_item_to_idx != item_to_idx
-        ):
-            raise RuntimeError(
-                "断点续训失败：当前样本映射与 checkpoint 不一致，请确认输入数据与配置未变化。"
-            )
-
-        model.load_state_dict(checkpoint["model_state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-
-        restored_epoch = int(checkpoint.get("epoch", 0))
-        start_epoch = max(1, restored_epoch + 1)
-
-        best_epoch = int(checkpoint.get("best_epoch", restored_epoch))
-        best_valid_loss = float(
-            checkpoint.get(
-                "best_valid_loss", checkpoint.get("valid_loss", best_valid_loss)
-            )
-        )
-        best_valid_auc = float(
-            checkpoint.get(
-                "best_valid_auc", checkpoint.get("valid_auc", best_valid_auc)
-            )
-        )
-
-        loaded_history = checkpoint.get("history")
-        if isinstance(loaded_history, list):
-            history = loaded_history
-            if history:
-                last_history = history[-1]
-                final_train_loss = float(
-                    last_history.get("train_loss", final_train_loss)
-                )
-                final_valid_loss = float(
-                    last_history.get("valid_loss", final_valid_loss)
+        else:
+            checkpoint = torch.load(resume_checkpoint, map_location="cpu")
+            checkpoint_user_to_idx = checkpoint.get("user_to_idx")
+            checkpoint_item_to_idx = checkpoint.get("item_to_idx")
+            if (
+                checkpoint_user_to_idx != user_to_idx
+                or checkpoint_item_to_idx != item_to_idx
+            ):
+                raise RuntimeError(
+                    "断点续训失败：当前样本映射与 checkpoint 不一致，请确认输入数据与配置未变化。"
                 )
 
-        _restore_rng_state(checkpoint.get("rng_state"))
+            model.load_state_dict(checkpoint["model_state_dict"])
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+
+            restored_epoch = int(checkpoint.get("epoch", 0))
+            start_epoch = max(1, restored_epoch + 1)
+
+            best_epoch = int(checkpoint.get("best_epoch", restored_epoch))
+            best_valid_loss = float(
+                checkpoint.get(
+                    "best_valid_loss", checkpoint.get("valid_loss", best_valid_loss)
+                )
+            )
+            best_valid_auc = float(
+                checkpoint.get(
+                    "best_valid_auc", checkpoint.get("valid_auc", best_valid_auc)
+                )
+            )
+
+            loaded_history = checkpoint.get("history")
+            if isinstance(loaded_history, list):
+                history = loaded_history
+                if history:
+                    last_history = history[-1]
+                    final_train_loss = float(
+                        last_history.get("train_loss", final_train_loss)
+                    )
+                    final_valid_loss = float(
+                        last_history.get("valid_loss", final_valid_loss)
+                    )
+
+            _restore_rng_state(checkpoint.get("rng_state"))
+            _log_train(
+                f"已加载断点 checkpoint: {resume_checkpoint}，将从 epoch {start_epoch}/{epochs} 继续。"
+            )
+    else:
+        _log_train(f"从头开始训练，共 {epochs} 个 epoch。")
+
+    if resume_requested and not resume:
+        _log_train("本次已回退为从头训练；后续中断后可基于 last_model.pt 继续。")
+
+    if not last_checkpoint_path.exists():
+        initial_payload = _build_checkpoint_payload(
+            epoch=max(0, start_epoch - 1),
+            model=model,
+            optimizer=optimizer,
+            user_to_idx=user_to_idx,
+            item_to_idx=item_to_idx,
+            history=history,
+            best_epoch=best_epoch,
+            best_valid_loss=best_valid_loss,
+            best_valid_auc=best_valid_auc,
+            dataloader_settings=loader_settings_summary,
+        )
+        torch.save(initial_payload, last_checkpoint_path)
+        if not best_checkpoint_path.exists():
+            torch.save(initial_payload, best_checkpoint_path)
+        _log_train(f"已写入初始 checkpoint: {last_checkpoint_path}")
 
     for epoch in range(start_epoch, epochs + 1):
+        epoch_start_ts = time.perf_counter()
+        _log_train(f"[Epoch {epoch}/{epochs}] 开始训练。")
         model.train()
         train_loss_sum = 0.0
         train_sample_count = 0
+        step = 0
 
-        for batch in train_loader:
+        for step, batch in enumerate(train_loader, start=1):
             user_ids, item_ids, labels = _unpack_three_tensors(batch)
             user_ids = user_ids.to(device)
             item_ids = item_ids.to(device)
@@ -671,6 +734,16 @@ def train_two_tower_local_mvp(
             batch_size_real = labels.shape[0]
             train_loss_sum += float(loss.item()) * batch_size_real
             train_sample_count += batch_size_real
+
+            if step == 1 or step % log_every_steps == 0:
+                running_loss = train_loss_sum / max(1, train_sample_count)
+                progress = (train_sample_count / train_samples) * 100.0
+                _log_train(
+                    f"[Epoch {epoch}/{epochs}] "
+                    f"step={step}/{estimated_train_steps}, "
+                    f"samples={train_sample_count}/{train_samples} ({progress:.1f}%), "
+                    f"running_loss={running_loss:.6f}"
+                )
 
         final_train_loss = (
             train_loss_sum / train_sample_count if train_sample_count > 0 else 0.0
@@ -699,6 +772,10 @@ def train_two_tower_local_mvp(
             best_valid_loss = valid_loss
             best_valid_auc = valid_auc
             best_epoch = epoch
+            _log_train(
+                f"[Epoch {epoch}/{epochs}] 刷新最优：valid_loss={best_valid_loss:.6f}, "
+                f"valid_auc={best_valid_auc:.6f}"
+            )
 
         checkpoint_payload = _build_checkpoint_payload(
             epoch=epoch,
@@ -717,7 +794,15 @@ def train_two_tower_local_mvp(
         if epoch == best_epoch:
             torch.save(checkpoint_payload, best_checkpoint_path)
 
+        epoch_cost = time.perf_counter() - epoch_start_ts
+        _log_train(
+            f"[Epoch {epoch}/{epochs}] 完成：train_loss={final_train_loss:.6f}, "
+            f"valid_loss={valid_loss:.6f}, valid_auc={valid_auc:.6f}, "
+            f"耗时={epoch_cost:.1f}s"
+        )
+
     if start_epoch > epochs:
+        _log_train("检测到已完成目标 epoch，跳过训练仅执行一次验证评估。")
         final_valid_loss, _ = _evaluate_epoch(
             model=model,
             dataloader=valid_loader,
@@ -785,7 +870,8 @@ def train_two_tower_local_mvp(
             "learning_rate": learning_rate,
             "weight_decay": weight_decay,
             "device": str(device),
-            "resume": resume,
+            "resume_requested": resume_requested,
+            "resume_effective": resume,
             "resume_from": resume_from,
             "max_rows_per_epoch": max_rows_per_epoch,
             "valid_max_rows_per_epoch": valid_max_rows,
@@ -828,6 +914,13 @@ def train_two_tower_local_mvp(
     report_json.write_text(
         json.dumps(report_payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
+    )
+
+    total_cost = time.perf_counter() - training_start_ts
+    _log_train(
+        "训练完成："
+        f"best_epoch={best_epoch}, best_valid_loss={best_valid_loss:.6f}, "
+        f"报告={report_json}, 总耗时={total_cost:.1f}s"
     )
 
     return TwoTowerTrainingSummary(

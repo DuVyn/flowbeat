@@ -10,7 +10,6 @@ from redis.asyncio import Redis
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.models.play_count import PlayCount
 from app.models.song import Song
 from app.schemas.music import (
@@ -27,8 +26,18 @@ class RecommendationService:
 
     _TWO_TOWER_KEY_VERSION = 2
     _CONTENT_KEY_VERSION = 1
-    _HOT_TOTAL_CACHE_KEY = "rec:global:hot:v1:total"
-    _HOT_TOTAL_CACHE_TTL_SECONDS = 60
+    _HOT_CACHE_KEY_VERSION = 2
+    _HOT_TOTAL_CACHE_KEY = f"rec:global:hot:v{_HOT_CACHE_KEY_VERSION}:total"
+
+    @classmethod
+    def _build_hot_cache_key(cls, *, limit: int, offset: int) -> str:
+        """全局热门分页缓存 key。"""
+        return f"rec:global:hot:v{cls._HOT_CACHE_KEY_VERSION}:{limit}:{offset}"
+
+    @staticmethod
+    def _is_hot_cache_valid(payload: HotRecommendationsResponse) -> bool:
+        """校验热门缓存是否可用。"""
+        return len(payload.items) > 0
 
     @classmethod
     def _build_two_tower_key(cls, user_id: int) -> str:
@@ -50,7 +59,7 @@ class RecommendationService:
         self.redis_client = redis_client
 
     async def _get_hot_total(self) -> int:
-        """读取热门总数，优先使用短 TTL 缓存。"""
+        """读取热门总数，优先使用 Redis 缓存。"""
         try:
             cached_total: str | None = await self.redis_client.get(
                 self._HOT_TOTAL_CACHE_KEY
@@ -69,11 +78,7 @@ class RecommendationService:
 
         total = int(await self.db.scalar(select(func.count(PlayCount.id))) or 0)
         try:
-            await self.redis_client.setex(
-                self._HOT_TOTAL_CACHE_KEY,
-                self._HOT_TOTAL_CACHE_TTL_SECONDS,
-                str(total),
-            )
+            await self.redis_client.set(self._HOT_TOTAL_CACHE_KEY, str(total))
         except Exception:
             pass
         return total
@@ -118,7 +123,7 @@ class RecommendationService:
         offset: int,
     ) -> HotRecommendationsResponse:
         """读取全局热门推荐，优先命中 Redis 缓存。"""
-        cache_key = f"rec:global:hot:v1:{limit}:{offset}"
+        cache_key = self._build_hot_cache_key(limit=limit, offset=offset)
         cached: str | None = None
         try:
             cached = await self.redis_client.get(cache_key)
@@ -126,7 +131,13 @@ class RecommendationService:
             cached = None
         if cached:
             try:
-                return HotRecommendationsResponse.model_validate_json(cached)
+                cached_payload = HotRecommendationsResponse.model_validate_json(cached)
+                if self._is_hot_cache_valid(cached_payload):
+                    return cached_payload
+                try:
+                    await self.redis_client.delete(cache_key)
+                except Exception:
+                    pass
             except ValidationError:
                 try:
                     await self.redis_client.delete(cache_key)
@@ -154,11 +165,7 @@ class RecommendationService:
         )
 
         try:
-            await self.redis_client.setex(
-                cache_key,
-                settings.recommendation_hot_cache_ttl_seconds,
-                response.model_dump_json(),
-            )
+            await self.redis_client.set(cache_key, response.model_dump_json())
         except Exception:
             # 缓存写入失败不应影响主流程，仍返回数据库结果。
             pass

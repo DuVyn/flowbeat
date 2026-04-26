@@ -10,6 +10,7 @@ const authStore = useAuthStore()
 
 const loading = ref(true)
 const saving = ref(false)
+const isEditing = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 const profile = ref<UserProfile | null>(null)
@@ -47,6 +48,45 @@ const registrationTimeText = computed(() => {
   return new Date(profile.value.registration_init_time).toLocaleString('zh-CN')
 })
 
+const genderText = computed(() => {
+  switch (profile.value?.gender) {
+    case 'male':
+      return '男'
+    case 'female':
+      return '女'
+    default:
+      return '不透露'
+  }
+})
+
+function resetFormFromProfile(userProfile: UserProfile | null) {
+  if (!userProfile) {
+    return
+  }
+  form.username = userProfile.username
+  form.gender = userProfile.gender
+  form.birthYear = ''
+  form.birthMonth = ''
+  form.birthDay = ''
+}
+
+function startEditing() {
+  if (!profile.value) {
+    return
+  }
+  resetFormFromProfile(profile.value)
+  errorMessage.value = ''
+  successMessage.value = ''
+  isEditing.value = true
+}
+
+function cancelEditing() {
+  resetFormFromProfile(profile.value)
+  errorMessage.value = ''
+  successMessage.value = ''
+  isEditing.value = false
+}
+
 async function loadProfile() {
   loading.value = true
   errorMessage.value = ''
@@ -54,8 +94,7 @@ async function loadProfile() {
   try {
     const data = await getUserProfile()
     profile.value = data
-    form.username = data.username
-    form.gender = data.gender
+    resetFormFromProfile(data)
     authStore.setProfile(data)
   } catch (error) {
     if (error instanceof HttpError) {
@@ -69,7 +108,7 @@ async function loadProfile() {
 }
 
 async function submitProfileUpdate() {
-  if (!profile.value) {
+  if (!profile.value || !isEditing.value) {
     return
   }
 
@@ -100,9 +139,8 @@ async function submitProfileUpdate() {
     profile.value = updated
     authStore.setProfile(updated)
     successMessage.value = '资料更新成功'
-    form.birthYear = ''
-    form.birthMonth = ''
-    form.birthDay = ''
+    resetFormFromProfile(updated)
+    isEditing.value = false
   } catch (error) {
     if (error instanceof HttpError) {
       errorMessage.value = error.detail
@@ -129,8 +167,38 @@ onMounted(() => {
     <div v-if="loading" class="profile-page__status">资料加载中...</div>
 
     <div v-else class="profile-card">
+      <div class="profile-card__actions">
+        <button
+          v-if="!isEditing"
+          class="profile-card__action-button"
+          type="button"
+          @click="startEditing"
+        >
+          修改信息
+        </button>
+        <button
+          v-else
+          class="profile-card__action-button profile-card__action-button--secondary"
+          type="button"
+          @click="cancelEditing"
+        >
+          取消修改
+        </button>
+      </div>
+
       <div v-if="errorMessage" class="profile-card__error">{{ errorMessage }}</div>
       <div v-if="successMessage" class="profile-card__success">{{ successMessage }}</div>
+
+      <div class="profile-card__static-row">
+        <div>
+          <label>用户名</label>
+          <p>{{ profile?.username ?? '-' }}</p>
+        </div>
+        <div>
+          <label>性别</label>
+          <p>{{ genderText }}</p>
+        </div>
+      </div>
 
       <div class="profile-card__static-row">
         <div>
@@ -150,7 +218,9 @@ onMounted(() => {
         </div>
       </div>
 
-      <form class="profile-card__form" @submit.prevent="submitProfileUpdate">
+      <p v-if="!isEditing" class="profile-card__read-tip">点击“修改信息”后可编辑资料。</p>
+
+      <form v-if="isEditing" class="profile-card__form" @submit.prevent="submitProfileUpdate">
         <div class="profile-card__field">
           <label for="username">用户名</label>
           <input id="username" v-model="form.username" type="text" maxlength="255" />
@@ -223,6 +293,28 @@ onMounted(() => {
   padding: 1.25rem;
 }
 
+.profile-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.8rem;
+}
+
+.profile-card__action-button {
+  border: none;
+  border-radius: 10px;
+  padding: 0.58rem 0.92rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, #4caf7d, #3d9e6e);
+  cursor: pointer;
+}
+
+.profile-card__action-button--secondary {
+  color: #2f4f3f;
+  background: rgba(76, 175, 125, 0.16);
+}
+
 .profile-card__error,
 .profile-card__success {
   margin-bottom: 0.8rem;
@@ -259,6 +351,12 @@ onMounted(() => {
 .profile-card__static-row p {
   margin: 0;
   font-size: 0.95rem;
+}
+
+.profile-card__read-tip {
+  margin: 0.2rem 0 0;
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 0.9rem;
 }
 
 .profile-card__form {

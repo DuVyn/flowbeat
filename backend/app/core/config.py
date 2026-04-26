@@ -39,6 +39,14 @@ class Settings(BaseSettings):
         default="flowbeat-songs",
         validation_alias="MINIO_SONG_BUCKET",
     )
+    minio_cover_prefix: str = Field(
+        default="covers",
+        validation_alias="MINIO_COVER_PREFIX",
+    )
+    minio_cover_extension: str = Field(
+        default="svg",
+        validation_alias="MINIO_COVER_EXTENSION",
+    )
     minio_presign_expires_seconds: int = Field(
         default=3600,
         validation_alias="MINIO_PRESIGN_EXPIRES_SECONDS",
@@ -49,10 +57,6 @@ class Settings(BaseSettings):
     redis_port: int = Field(default=6379, validation_alias="REDIS_PORT")
     redis_db: int = Field(default=0, validation_alias="REDIS_DB")
     redis_password: str | None = Field(default=None, validation_alias="REDIS_PASSWORD")
-    recommendation_hot_cache_ttl_seconds: int = Field(
-        default=300,
-        validation_alias="RECOMMENDATION_HOT_CACHE_TTL_SECONDS",
-    )
 
     # Auth
     auth_token_secret: str = Field(

@@ -8,13 +8,15 @@
  * 当前接入 Pinia 播放器状态，支持真实流媒体播放。
  */
 
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
-import mockCover from '@/assets/images/mock-cover-sunny.png'
+import mockCover from '@/assets/images/default-cover.svg'
+import { useCoverStore } from '@/stores/cover'
 import { usePlayerStore } from '@/stores/player'
 
 const playerStore = usePlayerStore()
+const coverStore = useCoverStore()
 const {
   currentTrack,
   isPlaying,
@@ -32,7 +34,14 @@ const isLiked = ref(false)
 
 const displayTitle = computed(() => currentTrack.value?.name ?? '未选择歌曲')
 const displayArtist = computed(() => currentTrack.value?.artist ?? '等待播放')
-const displayCover = computed(() => currentTrack.value?.coverUrl || mockCover)
+const displayCover = computed(() => {
+  if (!currentTrack.value) return mockCover
+  const cached = coverStore.getCoverUrl(currentTrack.value.id)
+  if (cached) return cached
+  const raw = currentTrack.value.coverUrl?.trim()
+  if (raw) return raw
+  return mockCover
+})
 const displayDuration = computed(() => {
   if (duration.value > 0) {
     return duration.value
@@ -76,6 +85,13 @@ function onProgressInput(e: Event) {
 function onVolumeInput(e: Event) {
   playerStore.setVolume(Number((e.target as HTMLInputElement).value))
 }
+
+// 当播放曲目变化时预解析封面
+watch(currentTrack, (track) => {
+  if (track) {
+    void coverStore.resolveCovers([track.id])
+  }
+})
 </script>
 
 <template>
