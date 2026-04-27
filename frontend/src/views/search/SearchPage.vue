@@ -5,7 +5,7 @@
  * 通过路由查询参数 q 读取关键词，并调用后端歌曲搜索接口。
  */
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { HttpError } from '@/api/http'
@@ -16,7 +16,6 @@ import { usePlayerStore } from '@/stores/player'
 import type { Track } from '@/types/music'
 
 const PAGE_SIZE = 20
-const BOTTOM_THRESHOLD_PX = 120
 
 const route = useRoute()
 const router = useRouter()
@@ -29,7 +28,6 @@ const hasMore = ref(false)
 const loading = ref(false)
 const loadingMore = ref(false)
 const loadError = ref('')
-const scrollContainer = ref<HTMLElement | null>(null)
 
 const hasKeyword = computed(() => keyword.value.length > 0)
 
@@ -103,7 +101,6 @@ async function loadResults(reset: boolean): Promise<void> {
   } finally {
     loading.value = false
     loadingMore.value = false
-    void nextTick().then(tryLoadMoreIfNeeded)
   }
 }
 
@@ -115,43 +112,11 @@ function refreshResults(): void {
   void loadResults(true)
 }
 
-function isNearBottom(container: HTMLElement): boolean {
-  const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight
-  return distanceToBottom <= BOTTOM_THRESHOLD_PX
-}
-
-function tryLoadMoreIfNeeded(): void {
-  const container = scrollContainer.value
-  if (!container) {
-    return
-  }
+function loadMoreResults(): void {
   if (loading.value || loadingMore.value || loadError.value || !hasMore.value) {
     return
   }
-  if (isNearBottom(container)) {
-    void loadResults(false)
-  }
-}
-
-function handleScroll(): void {
-  tryLoadMoreIfNeeded()
-}
-
-function bindScrollContainer(): void {
-  const container = document.querySelector('.main-layout__scroll')
-  if (!(container instanceof HTMLElement)) {
-    return
-  }
-  scrollContainer.value = container
-  container.addEventListener('scroll', handleScroll, { passive: true })
-}
-
-function unbindScrollContainer(): void {
-  if (!scrollContainer.value) {
-    return
-  }
-  scrollContainer.value.removeEventListener('scroll', handleScroll)
-  scrollContainer.value = null
+  void loadResults(false)
 }
 
 watch(
@@ -162,14 +127,6 @@ watch(
   },
   { immediate: true },
 )
-
-onMounted(() => {
-  bindScrollContainer()
-})
-
-onBeforeUnmount(() => {
-  unbindScrollContainer()
-})
 </script>
 
 <template>
@@ -201,17 +158,19 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <MusicList title="搜索结果" :tracks="tracks" :loading="loading" @play="handlePlay" />
+      <MusicList
+        title="搜索结果"
+        :tracks="tracks"
+        :loading="loading"
+        :has-more="hasMore"
+        :loading-more="loadingMore"
+        @play="handlePlay"
+        @load-more="loadMoreResults"
+      />
 
       <p v-if="!loading && !loadError && tracks.length === 0" class="search-page__no-result">
         未找到与“{{ keyword }}”相关的歌曲，请尝试更换关键词
       </p>
-
-      <div v-if="loadingMore" class="search-page__auto-loading">正在加载更多...</div>
-
-      <div v-else-if="!loading && !loadError && hasMore" class="search-page__auto-load-tip">
-        继续下滑可自动加载更多
-      </div>
 
       <p v-if="!loading && !loadError && tracks.length > 0" class="search-page__summary">
         {{ resultSummary }}

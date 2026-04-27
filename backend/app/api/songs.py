@@ -15,6 +15,7 @@ from app.schemas.music import (
     SongCoversRequest,
     SongCoversResponse,
     SongDetailResponse,
+    SongFeedResponse,
     SongSearchResponse,
     SongStreamResponse,
 )
@@ -34,6 +35,18 @@ async def search_songs(
     """按关键词搜索歌曲。"""
     service = SongService(db, redis_client=redis_client)
     return await service.search_songs(query=query, limit=limit, offset=offset)
+
+
+@router.get("/latest", response_model=SongFeedResponse)
+async def get_latest_songs(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db_session),
+) -> SongFeedResponse:
+    """获取最近入库的歌曲。"""
+
+    service = SongService(db)
+    return await service.get_latest_songs(limit=limit, offset=offset)
 
 
 @router.get("/{song_id}/detail", response_model=SongDetailResponse)

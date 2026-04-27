@@ -19,7 +19,6 @@ def to_track_response(
         song_id=song_id,
         name=name or song_id,
         artist=artist_name or "未知艺术家",
-        album="未知专辑",
         cover_url="",
         duration_ms=song_length or 0,
     )

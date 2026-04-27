@@ -1,89 +1,123 @@
 <script setup lang="ts">
 /**
- * MusicList — 音乐列表容器组件
+ * MusicList — 虚拟滚动音乐列表
  *
- * 负责组织和展示歌曲数据集合，包含：
- *   - 列表标题（可选）
- *   - 表头行（歌名/歌手 · 专辑 · 时长）
- *   - 循环渲染 MusicListItem
- *   - loading 骨架屏状态
- *   - empty 空数据提示状态
- *
- * Props:
- *   - tracks: 歌曲数组
- *   - title: 列表标题（可选）
- *   - loading: 是否加载中
+ * 使用固定行高虚拟化，避免无限追加导致 DOM 膨胀。
+ * 同时内置触底分页信号，承接后端 limit/offset 分页接口。
  */
 
-import { ref, watch } from 'vue'
+import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import type { Track } from '@/types/music'
 import MusicListItem from './MusicListItem.vue'
 import { useCoverStore } from '@/stores/cover'
 
 const props = withDefaults(
   defineProps<{
-    /** 歌曲数据列表 */
     tracks: Track[]
-    /** 列表标题 */
     title?: string
-    /** 是否处于加载状态 */
     loading?: boolean
+    hasMore?: boolean
+    loadingMore?: boolean
+    rowHeight?: number
+    viewportHeight?: number
+    overscan?: number
   }>(),
   {
     title: '',
     loading: false,
+    hasMore: false,
+    loadingMore: false,
+    rowHeight: 64,
+    viewportHeight: 520,
+    overscan: 6,
   },
 )
 
 const emit = defineEmits<{
-  /** 点击播放某首歌 */
   (e: 'play', track: Track): void
+  (e: 'load-more'): void
 }>()
 
 const coverStore = useCoverStore()
+const viewportEl = ref<HTMLElement | null>(null)
+const scrollTop = ref(0)
+const frozenTracks = shallowRef<readonly Track[]>(Object.freeze([]) as readonly Track[])
 
-/**
- * 首次加载标记：从 loading → 有数据的首次渲染跳过 TransitionGroup 动画，
- * 避免 20+ 项同时执行进入动画阻塞首屏感知。
- */
-const initialRender = ref(true)
+const totalCount = computed(() => frozenTracks.value.length)
+const totalHeight = computed(() => totalCount.value * props.rowHeight)
+const visibleCount = computed(
+  () => Math.ceil(props.viewportHeight / props.rowHeight) + props.overscan * 2,
+)
+const startIndex = computed(() =>
+  Math.max(0, Math.floor(scrollTop.value / props.rowHeight) - props.overscan),
+)
+const endIndex = computed(() => Math.min(totalCount.value, startIndex.value + visibleCount.value))
+const topPadding = computed(() => startIndex.value * props.rowHeight)
+const visibleTracks = computed(() => frozenTracks.value.slice(startIndex.value, endIndex.value))
+
+function handlePlay(track: Track): void {
+  emit('play', track)
+}
+
+function tryEmitLoadMore(container: HTMLElement | null = viewportEl.value): void {
+  if (!container || props.loading || props.loadingMore || !props.hasMore) {
+    return
+  }
+  const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+  if (distanceToBottom <= props.rowHeight * 2) {
+    emit('load-more')
+  }
+}
+
+function handleViewportScroll(event: Event): void {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+  scrollTop.value = target.scrollTop
+  tryEmitLoadMore(target)
+}
 
 watch(
   () => props.tracks,
-  (newTracks) => {
-    if (newTracks.length > 0) {
-      // 批量解析封面
-      const ids = newTracks.map((t) => t.id)
-      void coverStore.resolveCovers(ids)
+  (newTracks, oldTracks) => {
+    const immutableTracks = Object.freeze([...newTracks]) as readonly Track[]
+    frozenTracks.value = immutableTracks
 
-      // 首次有数据后，下一帧恢复动画
-      if (initialRender.value) {
-        requestAnimationFrame(() => {
-          initialRender.value = false
-        })
+    if (newTracks.length > 0) {
+      // 只为本次新增分页解析封面，避免全量重复请求。
+      const oldTrackIds = new Set((oldTracks ?? []).map((track) => track.id))
+      const appendedIds = newTracks.map((track) => track.id).filter((id) => !oldTrackIds.has(id))
+      if (appendedIds.length > 0) {
+        void coverStore.resolveCovers(appendedIds)
       }
     }
+
+    void nextTick().then(() => {
+      tryEmitLoadMore()
+    })
   },
   { immediate: true },
 )
 
-function handlePlay(track: Track) {
-  emit('play', track)
-}
+watch(
+  () => [props.hasMore, props.loading, props.loadingMore],
+  () => {
+    void nextTick().then(() => {
+      tryEmitLoadMore()
+    })
+  },
+)
 </script>
 
 <template>
   <section class="music-list" aria-label="歌曲列表">
-    <!-- 列表标题 -->
     <h2 v-if="title" class="music-list__title">{{ title }}</h2>
 
-    <!-- 表头 -->
     <div class="music-list__header" role="row" aria-hidden="true">
       <span class="music-list__header-index">#</span>
       <span class="music-list__header-info">歌名 / 歌手</span>
-      <span class="music-list__header-album">专辑</span>
       <span class="music-list__header-duration">
-        <!-- 时钟图标 -->
         <svg
           class="music-list__clock-icon"
           viewBox="0 0 24 24"
@@ -99,10 +133,8 @@ function handlePlay(track: Track) {
       </span>
     </div>
 
-    <!-- 分隔线 -->
     <div class="music-list__divider" />
 
-    <!-- Loading 骨架屏 -->
     <div v-if="loading" class="music-list__skeleton">
       <div
         v-for="i in 6"
@@ -116,13 +148,11 @@ function handlePlay(track: Track) {
           <div class="skeleton-line skeleton-line--name" />
           <div class="skeleton-line skeleton-line--artist" />
         </div>
-        <div class="skeleton-line skeleton-line--album" />
         <div class="skeleton-line skeleton-line--duration" />
       </div>
     </div>
 
-    <!-- 空状态 -->
-    <div v-else-if="tracks.length === 0" class="music-list__empty">
+    <div v-else-if="totalCount === 0" class="music-list__empty">
       <svg
         class="music-list__empty-icon"
         viewBox="0 0 24 24"
@@ -140,39 +170,43 @@ function handlePlay(track: Track) {
       <p class="music-list__empty-hint">试试搜索或浏览推荐内容</p>
     </div>
 
-    <!-- 歌曲列表 -->
-    <TransitionGroup
+    <div
       v-else
-      :name="initialRender ? '' : 'list'"
-      tag="div"
-      class="music-list__body"
+      ref="viewportEl"
+      class="music-list__viewport"
       role="rowgroup"
+      :style="{ maxHeight: `${viewportHeight}px` }"
+      @scroll.passive="handleViewportScroll"
     >
-      <MusicListItem
-        v-for="(track, idx) in tracks"
-        :key="track.id"
-        :track="track"
-        :index="idx + 1"
-        @play="handlePlay"
-      />
-    </TransitionGroup>
+      <div class="music-list__virtual-space" :style="{ height: `${totalHeight}px` }">
+        <div
+          class="music-list__virtual-window"
+          :style="{ transform: `translateY(${topPadding}px)` }"
+        >
+          <MusicListItem
+            v-for="(track, idx) in visibleTracks"
+            :key="track.id"
+            :track="track"
+            :index="startIndex + idx + 1"
+            @play="handlePlay"
+          />
+        </div>
+      </div>
+    </div>
 
-    <!-- 列表底部统计 -->
-    <div v-if="!loading && tracks.length > 0" class="music-list__footer">
-      共 {{ tracks.length }} 首歌曲
+    <div v-if="!loading && totalCount > 0" class="music-list__footer">
+      <span>共 {{ totalCount }} 首歌曲</span>
+      <span v-if="loadingMore" class="music-list__footer-status">正在加载更多...</span>
+      <span v-else-if="hasMore" class="music-list__footer-status">继续下滑可自动加载更多</span>
     </div>
   </section>
 </template>
 
 <style scoped>
-/* ========================================
- * 列表容器
- * ======================================== */
 .music-list {
   width: 100%;
 }
 
-/* ---- 标题 ---- */
 .music-list__title {
   font-size: 1.4rem;
   font-weight: 700;
@@ -181,12 +215,9 @@ function handlePlay(track: Track) {
   letter-spacing: -0.01em;
 }
 
-/* ========================================
- * 表头
- * ======================================== */
 .music-list__header {
   display: grid;
-  grid-template-columns: 2rem 2fr 1.2fr 4rem;
+  grid-template-columns: 2rem 1fr 4rem;
   align-items: center;
   gap: 1rem;
   padding: 0 1rem;
@@ -212,7 +243,6 @@ function handlePlay(track: Track) {
   height: 14px;
 }
 
-/* ---- 分隔线 ---- */
 .music-list__divider {
   height: 1px;
   background: linear-gradient(
@@ -225,49 +255,41 @@ function handlePlay(track: Track) {
   margin: 0.5rem 0;
 }
 
-/* ========================================
- * 列表体
- * ======================================== */
-.music-list__body {
+.music-list__viewport {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.music-list__virtual-space {
+  position: relative;
+  width: 100%;
+}
+
+.music-list__virtual-window {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  will-change: transform;
 }
 
-/* ========================================
- * TransitionGroup 动画
- * ======================================== */
-.list-enter-active {
-  transition: all 0.35s ease;
-}
-
-.list-leave-active {
-  transition: all 0.25s ease;
-}
-
-.list-enter-from {
-  opacity: 0;
-  transform: translateY(12px);
-}
-
-.list-leave-to {
-  opacity: 0;
-  transform: translateX(-20px);
-}
-
-/* ========================================
- * 底部统计
- * ======================================== */
 .music-list__footer {
-  margin-top: 1rem;
+  margin-top: 0.9rem;
   padding: 0 1rem;
   font-size: 0.78rem;
-  color: rgba(0, 0, 0, 0.32);
+  color: rgba(0, 0, 0, 0.36);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-/* ========================================
- * 空状态
- * ======================================== */
+.music-list__footer-status {
+  color: rgba(15, 23, 42, 0.48);
+}
+
 .music-list__empty {
   display: flex;
   flex-direction: column;
@@ -297,9 +319,6 @@ function handlePlay(track: Track) {
   margin: 0;
 }
 
-/* ========================================
- * Loading 骨架屏
- * ======================================== */
 .music-list__skeleton {
   display: flex;
   flex-direction: column;
@@ -308,7 +327,7 @@ function handlePlay(track: Track) {
 
 .music-list__skeleton-row {
   display: grid;
-  grid-template-columns: 2rem 44px 1fr 1.2fr 4rem;
+  grid-template-columns: 2rem 44px 1fr 4rem;
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 1rem;
@@ -326,7 +345,6 @@ function handlePlay(track: Track) {
   }
 }
 
-/* 骨架屏元素 */
 .skeleton-index,
 .skeleton-cover,
 .skeleton-line {
@@ -369,11 +387,6 @@ function handlePlay(track: Track) {
   height: 10px;
 }
 
-.skeleton-line--album {
-  width: 45%;
-  height: 12px;
-}
-
 .skeleton-line--duration {
   width: 32px;
   height: 12px;
@@ -389,20 +402,19 @@ function handlePlay(track: Track) {
   }
 }
 
-/* ========================================
- * 响应式
- * ======================================== */
 @media (max-width: 640px) {
   .music-list__header {
     grid-template-columns: 1.5rem 1fr 3.5rem;
   }
 
-  .music-list__header-album {
-    display: none;
-  }
-
   .music-list__skeleton-row {
     grid-template-columns: 1.5rem 40px 1fr 3.5rem;
+  }
+
+  .music-list__footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
   }
 }
 </style>

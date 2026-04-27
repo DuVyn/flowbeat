@@ -48,6 +48,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '个性推荐', requiresAuth: true },
       },
       {
+        path: 'discover',
+        name: 'Discover',
+        component: () => import('@/views/home/DiscoverPage.vue'),
+        meta: { title: '发现音乐', requiresAuth: true },
+      },
+      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@/views/user/ProfilePage.vue'),

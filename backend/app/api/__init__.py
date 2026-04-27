@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.auth import router as auth_router
+from app.api.genres import router as genres_router
 from app.api.history import router as history_router
 from app.api.recommendations import router as recommendations_router
 from app.api.songs import router as songs_router
@@ -14,5 +15,6 @@ api_router.include_router(user_router)
 api_router.include_router(history_router)
 api_router.include_router(songs_router)
 api_router.include_router(recommendations_router)
+api_router.include_router(genres_router)
 
 __all__ = ["api_router"]

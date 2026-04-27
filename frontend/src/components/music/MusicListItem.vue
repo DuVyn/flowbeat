@@ -2,7 +2,7 @@
 /**
  * MusicListItem — 音乐列表单行组件
  *
- * 负责渲染一首歌曲的完整信息行：序号、封面、歌名、艺术家、专辑名、时长。
+ * 负责渲染一首歌曲的完整信息行：序号、封面、歌名、艺术家、时长。
  * 悬停时显示播放按钮覆盖层，提供视觉交互反馈。
  *
  * Props:
@@ -59,7 +59,7 @@ function handlePlay() {
         <img
           class="music-list-item__cover"
           :src="coverUrl"
-          :alt="`${track.album} 封面`"
+          :alt="`${track.name} 封面`"
           loading="lazy"
           width="44"
           height="44"
@@ -77,9 +77,6 @@ function handlePlay() {
       </div>
     </div>
 
-    <!-- 专辑名 -->
-    <span class="music-list-item__album">{{ track.album }}</span>
-
     <!-- 时长 -->
     <span class="music-list-item__duration">{{ formatDuration(track.durationMs) }}</span>
   </div>
@@ -91,7 +88,7 @@ function handlePlay() {
  * ======================================== */
 .music-list-item {
   display: grid;
-  grid-template-columns: 2rem 2fr 1.2fr 4rem;
+  grid-template-columns: 2rem 1fr 4rem;
   align-items: center;
   gap: 1rem;
   padding: 0.5rem 1rem;
@@ -197,15 +194,6 @@ function handlePlay() {
   text-overflow: ellipsis;
 }
 
-/* ---- 专辑名 ---- */
-.music-list-item__album {
-  font-size: 0.85rem;
-  color: rgba(0, 0, 0, 0.5);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* ---- 时长 ---- */
 .music-list-item__duration {
   font-size: 0.85rem;
@@ -222,11 +210,6 @@ function handlePlay() {
     grid-template-columns: 1.5rem 1fr 3.5rem;
     gap: 0.5rem;
     padding: 0.5rem 0.75rem;
-  }
-
-  /* 隐藏专辑列 */
-  .music-list-item__album {
-    display: none;
   }
 }
 </style>

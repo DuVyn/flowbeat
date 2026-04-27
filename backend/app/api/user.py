@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthContext, get_auth_context
 from app.db.session import get_db_session
+from app.schemas.music import ListeningInsightsResponse
 from app.schemas.user import UpdateUserProfileRequest, UserProfileResponse
 from app.services.user_service import UserService, build_user_profile_response
 
@@ -36,3 +37,14 @@ async def update_profile(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
+
+
+@router.get("/insights/genres", response_model=ListeningInsightsResponse)
+async def get_listening_genre_insights(
+    auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db_session),
+) -> ListeningInsightsResponse:
+    """获取当前用户高频收听的前五个流派及权重。"""
+
+    service = UserService(db)
+    return await service.get_listening_genre_insights(user_id=auth_context.user.id)

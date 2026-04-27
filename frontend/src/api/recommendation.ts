@@ -14,7 +14,6 @@ function mapTrackDto(dto: TrackDto): Track {
     id: dto.id,
     name: dto.name,
     artist: dto.artist,
-    album: dto.album,
     coverUrl: dto.cover_url,
     durationMs: dto.duration_ms,
   }
@@ -75,3 +74,30 @@ export async function getPersonalizedRecommendations(
   })
 }
 
+export async function getContentRecommendations(
+  limit = 20,
+  offset = 0,
+): Promise<PersonalizedRecommendationsResponse> {
+  const key = `content:${limit}:${offset}`
+  return dedup(key, async () => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    })
+
+    const dto = await requestJson<PersonalizedRecommendationsResponseDto>(
+      `/api/recommendations/content?${params.toString()}`,
+      {
+        method: 'GET',
+      },
+    )
+
+    return {
+      strategy: dto.strategy,
+      limit: dto.limit,
+      offset: dto.offset,
+      total: dto.total,
+      items: dto.items.map(mapTrackDto),
+    }
+  })
+}

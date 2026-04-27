@@ -4,9 +4,8 @@
  *
  * 不再作为独立顶栏，而是嵌入内容卡片顶部。
  * 包含：
- *   1. 前进/后退导航按钮
- *   2. 搜索框
- *   3. 用户头像与个人中心入口（含下拉菜单）
+ *   1. 搜索框
+ *   2. 用户头像与个人中心入口（含下拉菜单）
  */
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -63,14 +62,6 @@ watch(
   { immediate: true },
 )
 
-/* ---- 路由导航 ---- */
-function goBack() {
-  router.back()
-}
-function goForward() {
-  router.forward()
-}
-
 /* ---- 用户下拉菜单 ---- */
 const showUserMenu = ref(false)
 const userMenuRef = ref<HTMLElement | null>(null)
@@ -114,34 +105,6 @@ async function handleLogout() {
 
 <template>
   <header class="topbar">
-    <!-- 前进/后退 -->
-    <div class="topbar__nav-buttons">
-      <button class="topbar__nav-btn" @click="goBack" aria-label="后退">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
-      </button>
-      <button class="topbar__nav-btn" @click="goForward" aria-label="前进">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
-      </button>
-    </div>
-
     <!-- 搜索框 -->
     <div class="topbar__search">
       <svg
@@ -222,39 +185,6 @@ async function handleLogout() {
 
   /* 半透明白色背景 + 底部渐隐，与内容区融为一体 */
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95) 60%, transparent);
-}
-
-/* ========================================
- * 前进/后退按钮
- * ======================================== */
-.topbar__nav-buttons {
-  display: flex;
-  gap: 0.375rem;
-  flex-shrink: 0;
-}
-
-.topbar__nav-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.06);
-  color: rgba(0, 0, 0, 0.45);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.topbar__nav-btn:hover {
-  background: rgba(0, 0, 0, 0.1);
-  color: #1a2e1a;
-}
-
-.topbar__nav-btn svg {
-  width: 15px;
-  height: 15px;
 }
 
 /* ========================================

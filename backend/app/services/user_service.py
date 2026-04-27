@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import SecurityError, calculate_age
+from app.models.associations import song_genre_m2m
+from app.models.play_history import PlayHistory
+from app.models.song import Song
+from app.models.song_meta import Genre
 from app.models.user import GenderEnum, User
+from app.schemas.music import GenrePreferenceItemResponse, ListeningInsightsResponse
 from app.schemas.user import UpdateUserProfileRequest, UserProfileResponse
+from app.services.genre_labels import format_genre_name
 
 
 def build_user_profile_response(user: User) -> UserProfileResponse:
@@ -27,6 +34,69 @@ class UserService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def get_listening_genre_insights(
+        self, *, user_id: int
+    ) -> ListeningInsightsResponse:
+        """聚合当前用户高频收听的前五个流派。"""
+
+        play_count_stmt = (
+            select(
+                Genre.genre_code,
+                func.count(PlayHistory.id).label("play_count"),
+            )
+            .join(song_genre_m2m, song_genre_m2m.c.genre_id == Genre.id)
+            .join(Song, Song.id == song_genre_m2m.c.song_id)
+            .join(PlayHistory, PlayHistory.song_id == Song.id)
+            .where(PlayHistory.user_id == user_id)
+            .group_by(Genre.id, Genre.genre_code)
+            .order_by(func.count(PlayHistory.id).desc(), Genre.genre_code.asc())
+            .limit(5)
+        )
+
+        rows = (await self.db.execute(play_count_stmt)).all()
+        total_plays = sum(int(row.play_count) for row in rows)
+
+        if total_plays <= 0:
+            preferred_stmt = (
+                select(Genre.genre_code)
+                .select_from(User)
+                .join(User.preferred_genres)
+                .where(User.id == user_id)
+                .order_by(Genre.genre_code.asc())
+                .limit(5)
+            )
+            preferred_rows = (await self.db.execute(preferred_stmt)).all()
+            items = [
+                GenrePreferenceItemResponse(
+                    genre_code=str(row.genre_code),
+                    genre_name=format_genre_name(str(row.genre_code)),
+                    play_count=1,
+                    weight=20.0,
+                )
+                for row in preferred_rows
+            ]
+            return ListeningInsightsResponse(
+                total_plays=0,
+                total_distinct_genres=len(items),
+                items=items,
+            )
+
+        items = [
+            GenrePreferenceItemResponse(
+                genre_code=str(row.genre_code),
+                genre_name=format_genre_name(str(row.genre_code)),
+                play_count=int(row.play_count),
+                weight=round((int(row.play_count) / total_plays) * 100, 2),
+            )
+            for row in rows
+        ]
+
+        return ListeningInsightsResponse(
+            total_plays=total_plays,
+            total_distinct_genres=len(items),
+            items=items,
+        )
 
     async def update_profile(
         self,

@@ -7,6 +7,7 @@ import {
   persistAuthSession,
   readStoredTokens,
 } from '@/api/http'
+import { usePlayerStore } from '@/stores/player'
 
 interface AuthState {
   accessToken: string | null
@@ -50,9 +51,11 @@ export const useAuthStore = defineStore('auth', {
     },
 
     clearSession() {
+      const playerStore = usePlayerStore()
       this.accessToken = null
       this.refreshToken = null
       this.user = null
+      playerStore.disposeAudio()
       clearAuthSession()
     },
   },

@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.play_history import PlayHistory
 from app.models.song import Song
 from app.schemas.music import (
+    ClearPlayHistoryResponse,
     PlayHistoryItemResponse,
     PlayHistoryResponse,
     RecordPlayHistoryRequest,
@@ -99,3 +100,51 @@ class PlayHistoryService:
             has_more=has_more,
             items=items,
         )
+
+    async def get_latest_play_history(
+        self,
+        *,
+        user_id: int,
+    ) -> PlayHistoryItemResponse | None:
+        """获取当前用户最近一次播放记录。"""
+
+        latest_stmt = (
+            select(
+                PlayHistory.played_at,
+                Song.id,
+                Song.song_id,
+                Song.name,
+                Song.artist_name,
+                Song.song_length,
+            )
+            .join(Song, Song.id == PlayHistory.song_id)
+            .where(PlayHistory.user_id == user_id)
+            .order_by(PlayHistory.played_at.desc(), PlayHistory.id.desc())
+            .limit(1)
+        )
+        row = (await self.db.execute(latest_stmt)).first()
+        if row is None:
+            return None
+
+        played_at, song_pk, song_id, song_name, artist_name, song_length = row
+        base_track = to_track_response(
+            song_pk=int(song_pk),
+            song_id=str(song_id),
+            name=song_name,
+            artist_name=artist_name,
+            song_length=song_length,
+        )
+        return PlayHistoryItemResponse(
+            **base_track.model_dump(),
+            played_at=played_at,
+        )
+
+    async def clear_play_history(self, *, user_id: int) -> ClearPlayHistoryResponse:
+        """清空当前用户的播放历史。"""
+
+        result = await self.db.execute(
+            delete(PlayHistory).where(PlayHistory.user_id == user_id)
+        )
+        await self.db.commit()
+        deleted_count = int(getattr(result, "rowcount", 0) or 0)
+        return ClearPlayHistoryResponse(deleted_count=deleted_count)

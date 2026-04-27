@@ -13,8 +13,6 @@ export interface Track {
   name: string
   /** 艺术家（主歌手 / 乐队名） */
   artist: string
-  /** 所属专辑名称 */
-  album: string
   /** 封面图片 URL */
   coverUrl: string
   /** 播放时长（毫秒） */
@@ -27,7 +25,6 @@ export interface TrackDto {
   song_id: string
   name: string
   artist: string
-  album: string
   cover_url: string
   duration_ms: number
 }
@@ -147,6 +144,94 @@ export interface PlayHistoryResponse {
   items: PlayHistoryItem[]
 }
 
+/** 流派偏好条目 DTO */
+export interface GenrePreferenceItem {
+  genreCode: string
+  genreName: string
+  playCount: number
+  weight: number
+}
+
+/** 流派偏好条目 DTO */
+export interface GenrePreferenceItemDto {
+  genre_code: string
+  genre_name: string
+  play_count: number
+  weight: number
+}
+
+/** 首页偏好画像响应 */
+export interface ListeningInsightsResponse {
+  totalPlays: number
+  totalDistinctGenres: number
+  items: GenrePreferenceItem[]
+}
+
+/** 首页偏好画像响应 DTO */
+export interface ListeningInsightsResponseDto {
+  total_plays: number
+  total_distinct_genres: number
+  items: GenrePreferenceItemDto[]
+}
+
+/** 流派目录条目 */
+export interface GenreCatalogItem {
+  genreCode: string
+  genreName: string
+  songCount: number
+}
+
+/** 流派目录条目 DTO */
+export interface GenreCatalogItemDto {
+  genre_code: string
+  genre_name: string
+  song_count: number
+}
+
+/** 流派目录响应 */
+export interface GenreCatalogResponse {
+  items: GenreCatalogItem[]
+}
+
+/** 流派目录响应 DTO */
+export interface GenreCatalogResponseDto {
+  items: GenreCatalogItemDto[]
+}
+
+/** 通用歌曲 Feed 响应 */
+export interface SongFeedResponse {
+  title: string
+  limit: number
+  offset: number
+  hasMore: boolean
+  genreCode: string | null
+  genreName: string | null
+  items: Track[]
+}
+
+/** 通用歌曲 Feed 响应 DTO */
+export interface SongFeedResponseDto {
+  title: string
+  limit: number
+  offset: number
+  has_more: boolean
+  genre_code: string | null
+  genre_name: string | null
+  items: TrackDto[]
+}
+
+/** 清空播放历史响应 */
+export interface ClearPlayHistoryResponse {
+  detail: string
+  deletedCount: number
+}
+
+/** 清空播放历史响应 DTO */
+export interface ClearPlayHistoryResponseDto {
+  detail: string
+  deleted_count: number
+}
+
 /** 歌单 / 播放列表 */
 export interface Playlist {
   /** 歌单唯一标识 */
@@ -161,20 +246,4 @@ export interface Playlist {
   tracks: Track[]
   /** 歌曲总数 */
   trackCount: number
-}
-
-/** 专辑信息 */
-export interface Album {
-  /** 专辑唯一标识 */
-  id: string
-  /** 专辑名称 */
-  name: string
-  /** 专辑封面 URL */
-  coverUrl: string
-  /** 艺术家 */
-  artist: string
-  /** 发行年份 */
-  year: number
-  /** 包含的曲目列表 */
-  tracks: Track[]
 }

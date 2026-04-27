@@ -5,7 +5,7 @@ import { recordPlayHistory } from '@/api/history'
 import { getSongStream } from '@/api/song'
 import type { Track } from '@/types/music'
 
-const DEFAULT_VOLUME = 80
+const DEFAULT_VOLUME = 30
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -23,6 +23,12 @@ export const usePlayerStore = defineStore('player', () => {
   const errorMessage = ref('')
 
   let audio: HTMLAudioElement | null = null
+  let onTimeUpdate: (() => void) | null = null
+  let onLoadedMetadata: (() => void) | null = null
+  let onPlay: (() => void) | null = null
+  let onPause: (() => void) | null = null
+  let onEnded: (() => void) | null = null
+  let onError: (() => void) | null = null
 
   const currentTrack = computed<Track | null>(() => {
     if (currentIndex.value < 0) {
@@ -49,28 +55,78 @@ export const usePlayerStore = defineStore('player', () => {
     audio.preload = 'metadata'
     audio.volume = volume.value / 100
 
-    audio.addEventListener('timeupdate', () => {
+    onTimeUpdate = () => {
       currentTime.value = audio?.currentTime ?? 0
-    })
-    audio.addEventListener('loadedmetadata', () => {
+    }
+    onLoadedMetadata = () => {
       const loadedDuration = audio?.duration
       duration.value = Number.isFinite(loadedDuration) ? (loadedDuration ?? 0) : 0
-    })
-    audio.addEventListener('play', () => {
+    }
+    onPlay = () => {
       isPlaying.value = true
-    })
-    audio.addEventListener('pause', () => {
+    }
+    onPause = () => {
       isPlaying.value = false
-    })
-    audio.addEventListener('ended', () => {
+    }
+    onEnded = () => {
       void nextTrack()
-    })
-    audio.addEventListener('error', () => {
+    }
+    onError = () => {
       errorMessage.value = '音频播放失败，请稍后重试'
       isLoading.value = false
-    })
+    }
+
+    audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('loadedmetadata', onLoadedMetadata)
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
+    audio.addEventListener('ended', onEnded)
+    audio.addEventListener('error', onError)
 
     return audio
+  }
+
+  function disposeAudio(): void {
+    if (!audio) {
+      return
+    }
+
+    audio.pause()
+    if (onTimeUpdate) {
+      audio.removeEventListener('timeupdate', onTimeUpdate)
+    }
+    if (onLoadedMetadata) {
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata)
+    }
+    if (onPlay) {
+      audio.removeEventListener('play', onPlay)
+    }
+    if (onPause) {
+      audio.removeEventListener('pause', onPause)
+    }
+    if (onEnded) {
+      audio.removeEventListener('ended', onEnded)
+    }
+    if (onError) {
+      audio.removeEventListener('error', onError)
+    }
+    audio.src = ''
+    audio.load()
+    audio = null
+
+    onTimeUpdate = null
+    onLoadedMetadata = null
+    onPlay = null
+    onPause = null
+    onEnded = null
+    onError = null
+
+    isPlaying.value = false
+    isLoading.value = false
+    currentTime.value = 0
+    duration.value = 0
+    currentIndex.value = -1
+    playlist.value = []
   }
 
   function setPlaylist(tracks: Track[], activeTrackId: number): void {
@@ -212,5 +268,6 @@ export const usePlayerStore = defineStore('player', () => {
     seekToPercent,
     setVolume,
     toggleMute,
+    disposeAudio,
   }
 })

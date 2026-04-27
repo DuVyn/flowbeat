@@ -24,6 +24,7 @@ from app.models.song import Song
 from app.schemas.music import (
     SongCoversResponse,
     SongDetailResponse,
+    SongFeedResponse,
     SongSearchResponse,
     SongStreamResponse,
     TrackResponse,
@@ -494,3 +495,40 @@ class SongService:
                 pass
 
         return SongCoversResponse(covers=covers)
+
+    async def get_latest_songs(self, *, limit: int, offset: int) -> SongFeedResponse:
+        """按主键倒序返回最近入库的歌曲。"""
+
+        query_limit = limit + 1
+        stmt = (
+            select(
+                Song.id,
+                Song.song_id,
+                Song.name,
+                Song.artist_name,
+                Song.song_length,
+            )
+            .order_by(Song.id.desc())
+            .limit(query_limit)
+            .offset(offset)
+        )
+        rows = (await self.db.execute(stmt)).all()
+        has_more = len(rows) > limit
+        page_rows = rows[:limit]
+        items = [
+            build_track_response(
+                song_pk=int(row.id),
+                song_id=str(row.song_id),
+                name=row.name,
+                artist_name=row.artist_name,
+                song_length=row.song_length,
+            )
+            for row in page_rows
+        ]
+        return SongFeedResponse(
+            title="新歌速递",
+            limit=limit,
+            offset=offset,
+            has_more=has_more,
+            items=items,
+        )

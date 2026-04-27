@@ -1,6 +1,8 @@
-import { requestJson } from '@/api/http'
+import { HttpError, requestJson } from '@/api/http'
 import { dedup } from '@/utils/dedup'
 import type {
+  ClearPlayHistoryResponse,
+  ClearPlayHistoryResponseDto,
   PlayHistoryItem,
   PlayHistoryItemDto,
   PlayHistoryResponse,
@@ -13,7 +15,6 @@ function mapPlayHistoryItemDto(dto: PlayHistoryItemDto): PlayHistoryItem {
     id: dto.id,
     name: dto.name,
     artist: dto.artist,
-    album: dto.album,
     coverUrl: dto.cover_url,
     durationMs: dto.duration_ms,
     playedAt: dto.played_at,
@@ -48,4 +49,29 @@ export async function getPlayHistory(limit = 20, offset = 0): Promise<PlayHistor
       items: dto.items.map(mapPlayHistoryItemDto),
     }
   })
+}
+
+export async function getLatestPlayHistory(): Promise<PlayHistoryItem | null> {
+  try {
+    const dto = await requestJson<PlayHistoryItemDto>('/api/me/history/latest', {
+      method: 'GET',
+    })
+    return mapPlayHistoryItemDto(dto)
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) {
+      return null
+    }
+    throw error
+  }
+}
+
+export async function clearPlayHistory(): Promise<ClearPlayHistoryResponse> {
+  const dto = await requestJson<ClearPlayHistoryResponseDto>('/api/me/history', {
+    method: 'DELETE',
+  })
+
+  return {
+    detail: dto.detail,
+    deletedCount: dto.deleted_count,
+  }
 }

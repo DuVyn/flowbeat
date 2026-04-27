@@ -45,3 +45,21 @@ async def get_personalized_recommendations(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/content", response_model=PersonalizedRecommendationsResponse)
+async def get_content_recommendations(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db_session),
+    redis_client: Redis = Depends(get_redis_client),
+) -> PersonalizedRecommendationsResponse:
+    """获取当前用户的内容冷启动推荐。"""
+
+    service = RecommendationService(db, redis_client)
+    return await service.get_content_recommendations(
+        user_id=auth_context.user.id,
+        limit=limit,
+        offset=offset,
+    )

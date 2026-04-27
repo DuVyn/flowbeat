@@ -342,3 +342,38 @@ class RecommendationService:
             total=hot_response.total,
             items=hot_response.items,
         )
+
+    async def get_content_recommendations(
+        self,
+        *,
+        user_id: int,
+        limit: int,
+        offset: int,
+    ) -> PersonalizedRecommendationsResponse:
+        """优先读取内容冷启动结果，缺失时回退到全局热门。"""
+
+        for content_key in (
+            self._build_content_fallback_key(user_id),
+            self._build_legacy_content_fallback_key(user_id),
+        ):
+            content_payload = await self._get_payload_by_key(cache_key=content_key)
+            if content_payload is None:
+                continue
+
+            content_response = await self._build_personalized_response_from_payload(
+                payload=content_payload,
+                strategy="content_cold_start",
+                limit=limit,
+                offset=offset,
+            )
+            if content_response is not None:
+                return content_response
+
+        hot_response = await self.get_hot_recommendations(limit=limit, offset=offset)
+        return PersonalizedRecommendationsResponse(
+            strategy="global_hot",
+            limit=hot_response.limit,
+            offset=hot_response.offset,
+            total=hot_response.total,
+            items=hot_response.items,
+        )

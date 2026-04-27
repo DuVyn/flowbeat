@@ -2,215 +2,253 @@
 /**
  * RecommendPage — 个性推荐主页面
  *
- * 展示个性化推荐结果，并标注当前命中的推荐策略。
- * 使用模块级缓存避免重复请求，切换页面再回来时直接使用缓存数据。
+ * 使用双卡入口 + 双列表的混合布局，分别承接双塔候选与近期偏好推荐。
  */
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
 
-import { getPersonalizedRecommendations } from '@/api/recommendation'
 import { HttpError } from '@/api/http'
+import { getContentRecommendations, getPersonalizedRecommendations } from '@/api/recommendation'
 import MusicList from '@/components/music/MusicList.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePlayerStore } from '@/stores/player'
-import { throttle } from '@/utils/throttle'
 import type { RecommendationStrategy, Track } from '@/types/music'
 
-const PAGE_SIZE = 20
-const BOTTOM_THRESHOLD_PX = 120
-const CACHE_TTL_MS = 5 * 60 * 1000 // 5 分钟
+const PAGE_SIZE = 16
 
-const router = useRouter()
-const route = useRoute()
 const authStore = useAuthStore()
 const playerStore = usePlayerStore()
 
-const tracks = ref<Track[]>([])
-const strategy = ref<RecommendationStrategy | null>(null)
-const total = ref(0)
-const loading = ref(true)
-const loadingMore = ref(false)
-const loadError = ref('')
-const scrollContainer = ref<HTMLElement | null>(null)
+const personalizedTracks = ref<Track[]>([])
+const contentTracks = ref<Track[]>([])
+const personalizedStrategy = ref<RecommendationStrategy | null>(null)
+const contentStrategy = ref<RecommendationStrategy | null>(null)
+const personalizedLoading = ref(true)
+const contentLoading = ref(true)
+const personalizedLoadingMore = ref(false)
+const contentLoadingMore = ref(false)
+const personalizedHasMore = ref(false)
+const contentHasMore = ref(false)
+const personalizedError = ref('')
+const contentError = ref('')
 
-/** 模块级缓存 */
-interface RecommendCache {
+let personalizedCache: {
   tracks: Track[]
   strategy: RecommendationStrategy | null
-  total: number
   timestamp: number
-}
+} | null = null
 
-let pageCache: RecommendCache | null = null
+let contentCache: {
+  tracks: Track[]
+  strategy: RecommendationStrategy | null
+  timestamp: number
+} | null = null
+
+const CACHE_TTL_MS = 5 * 60 * 1000
 
 const strategyLabelMap: Record<RecommendationStrategy, string> = {
-  two_tower: '双塔个性化',
-  content_cold_start: '偏好冷启动',
-  global_hot: '全局热门兜底',
+  two_tower: '双塔候选',
+  content_cold_start: '近期偏好',
+  global_hot: '热门兜底',
 }
 
 const strategyDescriptionMap: Record<RecommendationStrategy, string> = {
-  two_tower: '基于用户与歌曲向量召回，优先返回高相关候选。',
-  content_cold_start: '基于注册偏好流派进行内容匹配，适用于冷启动或主策略未命中。',
-  global_hot: '当前未命中个性化结果，系统已自动降级到全站热门榜单。',
+  two_tower: '基于用户与歌曲向量召回的候选结果。',
+  content_cold_start: '基于近期收听与偏好特征生成的候选结果。',
+  global_hot: '当前未命中个性化缓存，已切换到热门兜底。',
 }
 
-const strategyTagClass = computed(() => {
-  if (strategy.value === 'two_tower') {
-    return 'recommend-page__strategy-tag--primary'
-  }
-  if (strategy.value === 'content_cold_start') {
-    return 'recommend-page__strategy-tag--secondary'
-  }
-  return 'recommend-page__strategy-tag--fallback'
-})
-
-const strategyLabel = computed(() => {
-  if (!strategy.value) {
+const personalizedLabel = computed(() => {
+  if (!personalizedStrategy.value) {
     return '加载中'
   }
-  return strategyLabelMap[strategy.value]
+  return strategyLabelMap[personalizedStrategy.value]
 })
 
-const strategyDescription = computed(() => {
-  if (!strategy.value) {
-    return '正在获取推荐来源...'
+const personalizedDescription = computed(() => {
+  if (!personalizedStrategy.value) {
+    return '正在准备双塔候选列表。'
   }
-  return strategyDescriptionMap[strategy.value]
+  return strategyDescriptionMap[personalizedStrategy.value]
 })
 
-const hasMore = computed(() => tracks.value.length < total.value)
-
-const loadedSummary = computed(() => {
-  if (total.value <= 0) {
-    return ''
+const contentLabel = computed(() => {
+  if (!contentStrategy.value) {
+    return '加载中'
   }
-  return `已加载 ${tracks.value.length} / ${total.value} 首`
+  return strategyLabelMap[contentStrategy.value]
 })
 
-async function loadRecommendations(reset = false): Promise<void> {
-  if (!reset && (!hasMore.value || loading.value || loadingMore.value)) {
+const contentDescription = computed(() => {
+  if (!contentStrategy.value) {
+    return '正在准备近期偏好列表。'
+  }
+  return strategyDescriptionMap[contentStrategy.value]
+})
+
+function isCacheValid(timestamp: number): boolean {
+  return Date.now() - timestamp < CACHE_TTL_MS
+}
+
+async function loadPersonalized(force = false): Promise<void> {
+  if (!force && personalizedCache && isCacheValid(personalizedCache.timestamp)) {
+    personalizedTracks.value = personalizedCache.tracks
+    personalizedStrategy.value = personalizedCache.strategy
+    personalizedHasMore.value = personalizedCache.tracks.length >= PAGE_SIZE
+    personalizedLoading.value = false
     return
   }
 
-  if (reset) {
-    loading.value = true
-    tracks.value = []
-    total.value = 0
-  } else {
-    loadingMore.value = true
-  }
+  personalizedLoading.value = true
+  personalizedError.value = ''
 
   try {
-    const offset = reset ? 0 : tracks.value.length
-    const response = await getPersonalizedRecommendations(PAGE_SIZE, offset)
-
-    strategy.value = response.strategy
-    total.value = response.total
-    tracks.value = reset ? response.items : [...tracks.value, ...response.items]
-    loadError.value = ''
-
-    // 更新缓存
-    pageCache = {
-      tracks: [...tracks.value],
-      strategy: strategy.value,
-      total: total.value,
+    const response = await getPersonalizedRecommendations(PAGE_SIZE, 0)
+    personalizedTracks.value = response.items
+    personalizedStrategy.value = response.strategy
+    personalizedHasMore.value =
+      response.items.length >= PAGE_SIZE || response.total > response.items.length
+    personalizedCache = {
+      tracks: response.items,
+      strategy: response.strategy,
       timestamp: Date.now(),
     }
   } catch (error) {
     if (error instanceof HttpError && error.status === 401) {
       authStore.clearSession()
-      await router.replace({
-        name: 'Login',
-        query: { redirect: route.fullPath },
-      })
       return
     }
-
-    if (error instanceof TypeError && /fetch/i.test(error.message)) {
-      loadError.value = '网络请求失败，请检查后端服务是否可用'
-    } else {
-      loadError.value = error instanceof Error ? error.message : '个性推荐加载失败，请稍后重试'
-    }
-
-    if (reset) {
-      tracks.value = []
-      total.value = 0
-      strategy.value = null
-    }
+    personalizedError.value =
+      error instanceof Error ? error.message : '双塔候选加载失败，请稍后重试'
+    personalizedTracks.value = []
+    personalizedStrategy.value = null
   } finally {
-    loading.value = false
-    loadingMore.value = false
-    void nextTick().then(tryLoadMoreIfNeeded)
+    personalizedLoading.value = false
   }
 }
 
-function isNearBottom(container: HTMLElement): boolean {
-  const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight
-  return distanceToBottom <= BOTTOM_THRESHOLD_PX
-}
-
-function tryLoadMoreIfNeeded(): void {
-  const container = scrollContainer.value
-  if (!container) {
+async function loadMorePersonalized(): Promise<void> {
+  if (personalizedLoading.value || personalizedLoadingMore.value || !personalizedHasMore.value) {
     return
   }
-  if (loading.value || loadingMore.value || loadError.value || !hasMore.value) {
-    return
-  }
-  if (isNearBottom(container)) {
-    void loadRecommendations(false)
+
+  personalizedLoadingMore.value = true
+  personalizedError.value = ''
+
+  try {
+    const response = await getPersonalizedRecommendations(
+      PAGE_SIZE,
+      personalizedTracks.value.length,
+    )
+    personalizedTracks.value = [...personalizedTracks.value, ...response.items]
+    personalizedStrategy.value = response.strategy
+    personalizedHasMore.value =
+      response.items.length >= PAGE_SIZE || response.total > personalizedTracks.value.length
+    personalizedCache = {
+      tracks: [...personalizedTracks.value],
+      strategy: response.strategy,
+      timestamp: Date.now(),
+    }
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 401) {
+      authStore.clearSession()
+      return
+    }
+    personalizedError.value =
+      error instanceof Error ? error.message : '双塔候选加载失败，请稍后重试'
+  } finally {
+    personalizedLoadingMore.value = false
   }
 }
 
-const handleScroll = throttle((): void => {
-  tryLoadMoreIfNeeded()
-}, 200)
-
-function bindScrollContainer(): void {
-  const container = document.querySelector('.main-layout__scroll')
-  if (!(container instanceof HTMLElement)) {
+async function loadContent(force = false): Promise<void> {
+  if (!force && contentCache && isCacheValid(contentCache.timestamp)) {
+    contentTracks.value = contentCache.tracks
+    contentStrategy.value = contentCache.strategy
+    contentHasMore.value = contentCache.tracks.length >= PAGE_SIZE
+    contentLoading.value = false
     return
   }
-  scrollContainer.value = container
-  container.addEventListener('scroll', handleScroll, { passive: true })
+
+  contentLoading.value = true
+  contentError.value = ''
+
+  try {
+    const response = await getContentRecommendations(PAGE_SIZE, 0)
+    contentTracks.value = response.items
+    contentStrategy.value = response.strategy
+    contentHasMore.value =
+      response.items.length >= PAGE_SIZE || response.total > response.items.length
+    contentCache = {
+      tracks: response.items,
+      strategy: response.strategy,
+      timestamp: Date.now(),
+    }
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 401) {
+      authStore.clearSession()
+      return
+    }
+    contentError.value = error instanceof Error ? error.message : '近期偏好推荐加载失败，请稍后重试'
+    contentTracks.value = []
+    contentStrategy.value = null
+  } finally {
+    contentLoading.value = false
+  }
 }
 
-function unbindScrollContainer(): void {
-  if (!scrollContainer.value) {
+async function loadMoreContent(): Promise<void> {
+  if (contentLoading.value || contentLoadingMore.value || !contentHasMore.value) {
     return
   }
-  scrollContainer.value.removeEventListener('scroll', handleScroll)
-  scrollContainer.value = null
-}
 
-function handlePlay(track: Track): void {
-  void playerStore.playTrack(track, tracks.value)
+  contentLoadingMore.value = true
+  contentError.value = ''
+
+  try {
+    const response = await getContentRecommendations(PAGE_SIZE, contentTracks.value.length)
+    contentTracks.value = [...contentTracks.value, ...response.items]
+    contentStrategy.value = response.strategy
+    contentHasMore.value =
+      response.items.length >= PAGE_SIZE || response.total > contentTracks.value.length
+    contentCache = {
+      tracks: [...contentTracks.value],
+      strategy: response.strategy,
+      timestamp: Date.now(),
+    }
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 401) {
+      authStore.clearSession()
+      return
+    }
+    contentError.value = error instanceof Error ? error.message : '近期偏好推荐加载失败，请稍后重试'
+  } finally {
+    contentLoadingMore.value = false
+  }
 }
 
 function refreshRecommendations(): void {
-  pageCache = null
-  void loadRecommendations(true)
+  personalizedCache = null
+  contentCache = null
+  void loadPersonalized(true)
+  void loadContent(true)
+}
+
+function handlePersonalizedPlay(track: Track): void {
+  void playerStore.playTrack(track, personalizedTracks.value)
+}
+
+function handleContentPlay(track: Track): void {
+  void playerStore.playTrack(track, contentTracks.value)
+}
+
+function scrollToSection(sectionId: string): void {
+  document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 onMounted(() => {
-  bindScrollContainer()
-
-  // 如果缓存有效，直接使用缓存数据
-  if (pageCache && Date.now() - pageCache.timestamp < CACHE_TTL_MS) {
-    tracks.value = pageCache.tracks
-    strategy.value = pageCache.strategy
-    total.value = pageCache.total
-    loading.value = false
-    return
-  }
-
-  void loadRecommendations(true)
-})
-
-onBeforeUnmount(() => {
-  unbindScrollContainer()
+  void loadPersonalized()
+  void loadContent()
 })
 </script>
 
@@ -218,218 +256,265 @@ onBeforeUnmount(() => {
   <div class="recommend-page">
     <header class="recommend-page__hero">
       <div>
-        <h1 class="recommend-page__title">个性推荐</h1>
+        <p class="recommend-page__eyebrow">个性推荐</p>
+        <h1 class="recommend-page__title">把推荐拆成可点、可听、可解释的两段</h1>
         <p class="recommend-page__subtitle">
-          按你的偏好与行为生成推荐，并在未命中时自动降级保证可用性
+          顶部卡片负责进入感，中部展示双塔候选，底部呈现近期偏好推荐。
         </p>
       </div>
+
       <button
         class="recommend-page__refresh"
-        :disabled="loading || loadingMore"
+        :disabled="personalizedLoading || contentLoading"
         @click="refreshRecommendations"
       >
-        {{ loading ? '刷新中...' : '刷新推荐' }}
+        {{ personalizedLoading || contentLoading ? '刷新中...' : '刷新推荐' }}
       </button>
     </header>
 
-    <section class="recommend-page__strategy-card" aria-live="polite">
-      <p class="recommend-page__strategy-caption">当前命中策略</p>
-      <div class="recommend-page__strategy-content">
-        <span class="recommend-page__strategy-tag" :class="strategyTagClass">
-          {{ strategyLabel }}
-        </span>
-        <p class="recommend-page__strategy-desc">{{ strategyDescription }}</p>
-      </div>
+    <section class="recommend-page__entry-grid">
+      <button
+        class="recommend-page__entry-card recommend-page__entry-card--primary"
+        @click="scrollToSection('personalized-section')"
+      >
+        <span class="recommend-page__entry-tag">猜你喜欢</span>
+        <strong>双塔候选</strong>
+        <p>进入后直接查看由用户行为向量召回的一组音乐，适合快速点播。</p>
+        <span class="recommend-page__entry-foot"
+          >{{ personalizedTracks.length || PAGE_SIZE }} 首候选</span
+        >
+      </button>
+
+      <button
+        class="recommend-page__entry-card recommend-page__entry-card--secondary"
+        @click="scrollToSection('content-section')"
+      >
+        <span class="recommend-page__entry-tag">流派探索</span>
+        <strong>近期偏好推荐</strong>
+        <p>基于最近收听与内容相似度生成的推荐列表，适合继续深挖同类音乐。</p>
+        <span class="recommend-page__entry-foot"
+          >{{ contentTracks.length || PAGE_SIZE }} 首候选</span
+        >
+      </button>
     </section>
 
-    <div v-if="loadError" class="recommend-page__error">
-      <span>{{ loadError }}</span>
-      <button
-        class="recommend-page__retry"
-        :disabled="loading || loadingMore"
-        @click="refreshRecommendations"
-      >
-        {{ loading ? '重试中...' : '重试' }}
-      </button>
-    </div>
+    <section id="personalized-section" class="recommend-page__section">
+      <div class="recommend-page__section-head">
+        <div>
+          <p class="recommend-page__section-eyebrow">双塔结果</p>
+          <h2 class="recommend-page__section-title">为你定制的单曲</h2>
+          <p class="recommend-page__section-subtitle">{{ personalizedDescription }}</p>
+        </div>
+        <span class="recommend-page__section-chip">{{ personalizedLabel }}</span>
+      </div>
 
-    <MusicList title="为你推荐" :tracks="tracks" :loading="loading" @play="handlePlay" />
+      <div v-if="personalizedError" class="recommend-page__error">
+        <span>{{ personalizedError }}</span>
+      </div>
 
-    <div v-if="loadingMore" class="recommend-page__auto-loading">正在加载更多...</div>
+      <MusicList
+        :title="`为你定制的单曲 · ${personalizedTracks.length} 首`"
+        :tracks="personalizedTracks"
+        :loading="personalizedLoading"
+        :has-more="personalizedHasMore"
+        :loading-more="personalizedLoadingMore"
+        @play="handlePersonalizedPlay"
+        @load-more="loadMorePersonalized"
+      />
+    </section>
 
-    <div v-else-if="!loading && !loadError && hasMore" class="recommend-page__auto-load-tip">
-      继续下滑可自动加载更多
-    </div>
+    <section id="content-section" class="recommend-page__section">
+      <div class="recommend-page__section-head">
+        <div>
+          <p class="recommend-page__section-eyebrow">近期偏好</p>
+          <h2 class="recommend-page__section-title">基于近期喜好的推荐</h2>
+          <p class="recommend-page__section-subtitle">{{ contentDescription }}</p>
+        </div>
+        <span class="recommend-page__section-chip recommend-page__section-chip--soft">{{
+          contentLabel
+        }}</span>
+      </div>
 
-    <p v-if="!loading && tracks.length > 0" class="recommend-page__summary">{{ loadedSummary }}</p>
+      <div v-if="contentError" class="recommend-page__error">
+        <span>{{ contentError }}</span>
+      </div>
 
-    <p v-else-if="!loading && !loadError && tracks.length === 0" class="recommend-page__empty-tip">
-      当前暂无可展示推荐，请稍后刷新重试
-    </p>
+      <MusicList
+        :title="`基于近期喜好的推荐 · ${contentTracks.length} 首`"
+        :tracks="contentTracks"
+        :loading="contentLoading"
+        :has-more="contentHasMore"
+        :loading-more="contentLoadingMore"
+        @play="handleContentPlay"
+        @load-more="loadMoreContent"
+      />
+    </section>
   </div>
 </template>
 
 <style scoped>
 .recommend-page {
-  padding: 0.5rem 0;
-  color: #1a2e1a;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  padding: 0.25rem 0 0.75rem;
+  color: #163025;
 }
 
 .recommend-page__hero {
-  margin-bottom: 1.25rem;
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
+  justify-content: space-between;
   gap: 1rem;
 }
 
-.recommend-page__title {
-  font-size: 1.75rem;
-  font-weight: 700;
+.recommend-page__eyebrow,
+.recommend-page__section-eyebrow {
   margin: 0 0 0.35rem;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #1a7a67, #2bb673);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.45);
 }
 
-.recommend-page__subtitle {
-  color: rgba(0, 0, 0, 0.45);
+.recommend-page__title {
   margin: 0;
-  font-size: 0.9rem;
-  max-width: 640px;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+}
+
+.recommend-page__subtitle,
+.recommend-page__section-subtitle {
+  margin: 0.7rem 0 0;
+  color: rgba(15, 23, 42, 0.56);
+  font-size: 0.94rem;
+  max-width: 54rem;
 }
 
 .recommend-page__refresh {
   border: none;
   border-radius: 999px;
-  padding: 0.48rem 0.95rem;
-  background: linear-gradient(135deg, #1d6f46, #4caf7d);
+  padding: 0.7rem 1rem;
+  background: linear-gradient(135deg, #0f6b47, #16a34a);
   color: #fff;
-  font-size: 0.8rem;
-  font-weight: 600;
-  transition: transform 0.18s ease;
+  font-weight: 700;
+  box-shadow: 0 12px 24px rgba(16, 185, 129, 0.24);
 }
 
-.recommend-page__refresh:hover:not(:disabled) {
-  transform: translateY(-1px);
+.recommend-page__entry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
 }
 
-.recommend-page__refresh:disabled {
-  opacity: 0.68;
-  cursor: not-allowed;
-}
-
-.recommend-page__strategy-card {
-  margin-bottom: 1.25rem;
-  padding: 0.95rem 1rem;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
-  background: radial-gradient(circle at 0% 0%, rgba(76, 175, 125, 0.14), transparent 45%), #ffffff;
-}
-
-.recommend-page__strategy-caption {
-  margin: 0 0 0.45rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.38);
-}
-
-.recommend-page__strategy-content {
+.recommend-page__entry-card {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1rem;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  text-align: left;
+  color: #163025;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
-.recommend-page__strategy-tag {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  padding: 0.24rem 0.65rem;
-  font-size: 0.76rem;
-  font-weight: 600;
+.recommend-page__entry-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 34px rgba(11, 30, 22, 0.12);
 }
 
-.recommend-page__strategy-tag--primary {
-  color: #125f3c;
-  background: rgba(44, 184, 115, 0.18);
+.recommend-page__entry-card strong {
+  font-size: 1.2rem;
 }
 
-.recommend-page__strategy-tag--secondary {
-  color: #0b6174;
-  background: rgba(58, 156, 181, 0.17);
-}
-
-.recommend-page__strategy-tag--fallback {
-  color: #7a4e00;
-  background: rgba(244, 183, 63, 0.22);
-}
-
-.recommend-page__strategy-desc {
+.recommend-page__entry-card p {
   margin: 0;
-  color: rgba(0, 0, 0, 0.55);
-  font-size: 0.82rem;
+  color: rgba(15, 23, 42, 0.55);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.recommend-page__entry-tag,
+.recommend-page__entry-foot,
+.recommend-page__section-chip {
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.recommend-page__entry-tag {
+  color: rgba(15, 23, 42, 0.42);
+}
+
+.recommend-page__entry-foot {
+  color: rgba(15, 23, 42, 0.42);
+}
+
+.recommend-page__entry-card--primary {
+  background: linear-gradient(180deg, rgba(236, 253, 245, 0.98), rgba(214, 248, 231, 0.92));
+}
+
+.recommend-page__entry-card--secondary {
+  background: linear-gradient(180deg, rgba(255, 250, 235, 0.98), rgba(255, 241, 196, 0.88));
+}
+
+.recommend-page__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  border-radius: 24px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 16px 42px rgba(11, 30, 22, 0.06);
+}
+
+.recommend-page__section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.recommend-page__section-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.recommend-page__section-chip {
+  padding: 0.5rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #0f6b47;
+}
+
+.recommend-page__section-chip--soft {
+  background: rgba(245, 158, 11, 0.12);
+  color: #8a5a00;
 }
 
 .recommend-page__error {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 0 0 1rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid rgba(209, 77, 77, 0.3);
-  border-radius: 8px;
-  background: rgba(255, 230, 230, 0.5);
-  color: #8a2b2b;
-  font-size: 0.85rem;
+  padding: 0.8rem 0.95rem;
+  border-radius: 16px;
+  border: 1px solid rgba(220, 85, 85, 0.18);
+  color: #9a2d2d;
+  background: rgba(255, 235, 235, 0.72);
 }
 
-.recommend-page__retry {
-  border: none;
-  border-radius: 6px;
-  padding: 0.35rem 0.75rem;
-  background: #1a2e1a;
-  color: #fff;
-  cursor: pointer;
-  font-size: 0.78rem;
-}
+@media (max-width: 900px) {
+  .recommend-page__hero,
+  .recommend-page__section-head,
+  .recommend-page__entry-grid {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
 
-.recommend-page__retry:disabled {
-  opacity: 0.72;
-  cursor: not-allowed;
-}
-
-.recommend-page__auto-loading,
-.recommend-page__auto-load-tip {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 1rem;
-  font-size: 0.82rem;
-  color: rgba(0, 0, 0, 0.45);
-}
-
-.recommend-page__summary {
-  margin: 0.75rem 0 0;
-  text-align: center;
-  font-size: 0.8rem;
-  color: rgba(0, 0, 0, 0.45);
-}
-
-.recommend-page__empty-tip {
-  margin: 1rem 0 0;
-  text-align: center;
-  font-size: 0.82rem;
-  color: rgba(0, 0, 0, 0.42);
-}
-
-@media (max-width: 768px) {
   .recommend-page__hero {
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
   }
 }
 </style>

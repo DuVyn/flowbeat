@@ -17,7 +17,6 @@ class TrackResponse(BaseModel):
     song_id: str
     name: str
     artist: str
-    album: str
     cover_url: str
     duration_ms: int
 
@@ -117,3 +116,59 @@ class PlayHistoryResponse(BaseModel):
     offset: int = Field(ge=0)
     has_more: bool
     items: list[PlayHistoryItemResponse]
+
+
+class GenrePreferenceItemResponse(BaseModel):
+    """用户流派偏好条目。"""
+
+    genre_code: str
+    genre_name: str
+    play_count: int
+    weight: float
+
+
+class ListeningInsightsResponse(BaseModel):
+    """首页偏好雷达图数据。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_plays: int
+    total_distinct_genres: int
+    items: list[GenrePreferenceItemResponse]
+
+
+class GenreCatalogItemResponse(BaseModel):
+    """流派目录条目。"""
+
+    genre_code: str
+    genre_name: str
+    song_count: int
+
+
+class GenreCatalogResponse(BaseModel):
+    """流派目录列表响应。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[GenreCatalogItemResponse]
+
+
+class SongFeedResponse(BaseModel):
+    """通用歌曲列表响应。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+    has_more: bool
+    genre_code: str | None = None
+    genre_name: str | None = None
+    items: list[TrackResponse]
+
+
+class ClearPlayHistoryResponse(BaseModel):
+    """清空播放历史响应。"""
+
+    detail: str = "清空成功"
+    deleted_count: int = Field(ge=0)
