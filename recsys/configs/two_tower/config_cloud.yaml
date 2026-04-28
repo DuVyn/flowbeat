@@ -9,13 +9,13 @@ seed: 20260428
 
 # ---------- I/O 路径（对象存储 URI） ----------
 paths:
-  user_features_csv:      "cos://flowbeat-ml-datasets/two_tower/user_features.csv"
-  item_features_csv:      "cos://flowbeat-ml-datasets/two_tower/item_features.csv"
+  user_features_csv: "cos://flowbeat-ml-datasets/two_tower/user_features.csv"
+  item_features_csv: "cos://flowbeat-ml-datasets/two_tower/item_features.csv"
   train_interactions_csv: "cos://flowbeat-ml-datasets/two_tower/train_interactions.csv"
-  test_interactions_csv:  "cos://flowbeat-ml-datasets/two_tower/test_interactions.csv"
+  test_interactions_csv: "cos://flowbeat-ml-datasets/two_tower/test_interactions.csv"
   checkpoint_dir: "cos://flowbeat-ml-artifacts/two_tower/checkpoints"
-  embedding_dir:  "cos://flowbeat-ml-artifacts/two_tower/embeddings"
-  report_dir:     "cos://flowbeat-ml-artifacts/two_tower/reports"
+  embedding_dir: "cos://flowbeat-ml-artifacts/two_tower/embeddings"
+  report_dir: "cos://flowbeat-ml-artifacts/two_tower/reports"
 
 # ---------- 模型超参数 ----------
 model_params:
@@ -28,7 +28,7 @@ train_params:
   batch_size: 1024
   learning_rate: 0.0005
   weight_decay: 1.0e-5
-  epochs: 20
+  epochs: 8
   device: "auto"
   num_workers: 8
   pin_memory: true
