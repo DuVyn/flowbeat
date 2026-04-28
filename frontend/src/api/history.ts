@@ -17,6 +17,7 @@ function mapPlayHistoryItemDto(dto: PlayHistoryItemDto): PlayHistoryItem {
     artist: dto.artist,
     coverUrl: dto.cover_url,
     durationMs: dto.duration_ms,
+    isLiked: dto.is_liked,
     playedAt: dto.played_at,
   }
 }

@@ -185,6 +185,10 @@ async function handleLogout() {
 
   /* 半透明白色背景 + 底部渐隐，与内容区融为一体 */
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95) 60%, transparent);
+
+  /* 顶栏顶部两侧圆角，和其他卡片保持一致 */
+  border-top-left-radius: var(--card-radius);
+  border-top-right-radius: var(--card-radius);
 }
 
 /* ========================================

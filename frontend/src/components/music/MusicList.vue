@@ -21,6 +21,7 @@ const props = withDefaults(
     rowHeight?: number
     viewportHeight?: number
     overscan?: number
+    showLikeAction?: boolean
   }>(),
   {
     title: '',
@@ -30,12 +31,14 @@ const props = withDefaults(
     rowHeight: 64,
     viewportHeight: 520,
     overscan: 6,
+    showLikeAction: false,
   },
 )
 
 const emit = defineEmits<{
   (e: 'play', track: Track): void
   (e: 'load-more'): void
+  (e: 'toggle-like', track: Track): void
 }>()
 
 const coverStore = useCoverStore()
@@ -57,6 +60,10 @@ const visibleTracks = computed(() => frozenTracks.value.slice(startIndex.value, 
 
 function handlePlay(track: Track): void {
   emit('play', track)
+}
+
+function handleToggleLike(track: Track): void {
+  emit('toggle-like', track)
 }
 
 function tryEmitLoadMore(container: HTMLElement | null = viewportEl.value): void {
@@ -114,7 +121,12 @@ watch(
   <section class="music-list" aria-label="歌曲列表">
     <h2 v-if="title" class="music-list__title">{{ title }}</h2>
 
-    <div class="music-list__header" role="row" aria-hidden="true">
+    <div
+      class="music-list__header"
+      :class="{ 'music-list__header--with-action': showLikeAction }"
+      role="row"
+      aria-hidden="true"
+    >
       <span class="music-list__header-index">#</span>
       <span class="music-list__header-info">歌名 / 歌手</span>
       <span class="music-list__header-duration">
@@ -131,6 +143,7 @@ watch(
           <polyline points="12 6 12 12 16 14" />
         </svg>
       </span>
+      <span v-if="showLikeAction" class="music-list__header-action"></span>
     </div>
 
     <div class="music-list__divider" />
@@ -188,7 +201,9 @@ watch(
             :key="track.id"
             :track="track"
             :index="startIndex + idx + 1"
+            :show-like-action="showLikeAction"
             @play="handlePlay"
+            @toggle-like="handleToggleLike"
           />
         </div>
       </div>
@@ -226,6 +241,15 @@ watch(
   color: rgba(0, 0, 0, 0.38);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.music-list__header--with-action {
+  grid-template-columns: 2rem 1fr 4rem auto;
+}
+
+.music-list__header-action {
+  width: 2rem;
+  justify-self: end;
 }
 
 .music-list__header-index {

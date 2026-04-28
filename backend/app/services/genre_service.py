@@ -14,6 +14,7 @@ from app.schemas.music import (
     GenreCatalogResponse,
     SongFeedResponse,
 )
+from app.services.favorite_service import fetch_liked_song_ids
 from app.services.genre_labels import format_genre_name
 from app.services.track_mapper import to_track_response
 
@@ -21,8 +22,26 @@ from app.services.track_mapper import to_track_response
 class GenreService:
     """流派目录与流派歌曲读取服务。"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, *, user_id: int | None = None):
         self.db = db
+        self.user_id = user_id
+
+    async def _apply_liked_flags(self, tracks: list) -> list:
+        """按当前用户收藏关系补充曲目收藏状态。"""
+
+        user_id = self.user_id
+        if user_id is None or not tracks:
+            return tracks
+
+        liked_song_ids = await fetch_liked_song_ids(
+            self.db,
+            user_id=user_id,
+            song_ids=[track.id for track in tracks],
+        )
+        return [
+            track.model_copy(update={"is_liked": track.id in liked_song_ids})
+            for track in tracks
+        ]
 
     async def get_genre_catalog(self) -> GenreCatalogResponse:
         """返回所有已入库流派及其关联歌曲数量。"""
@@ -89,9 +108,11 @@ class GenreService:
                 name=row.name,
                 artist_name=row.artist_name,
                 song_length=row.song_length,
+                is_liked=False,
             )
             for row in rows
         ]
+        items = await self._apply_liked_flags(items)
 
         return SongFeedResponse(
             title=f"{genre_name}歌曲",

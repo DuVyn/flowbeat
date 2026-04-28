@@ -29,6 +29,7 @@ from app.schemas.music import (
     SongStreamResponse,
     TrackResponse,
 )
+from app.services.favorite_service import fetch_liked_song_ids
 from app.services.track_mapper import to_track_response
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ def build_track_response(
     name: str | None,
     artist_name: str | None,
     song_length: int | None,
+    is_liked: bool = False,
 ) -> TrackResponse:
     """兼容旧调用入口，实际映射委托给共享 mapper。"""
     return to_track_response(
@@ -49,6 +51,7 @@ def build_track_response(
         name=name,
         artist_name=artist_name,
         song_length=song_length,
+        is_liked=is_liked,
     )
 
 
@@ -172,10 +175,12 @@ class SongService:
         *,
         minio_client: Minio | None = None,
         redis_client: Redis | None = None,
+        user_id: int | None = None,
     ):
         self.db = db
         self.minio_client = minio_client
         self.redis_client = redis_client
+        self.user_id = user_id
 
     @staticmethod
     def _build_cover_object_key(audio_object_key: str) -> str:
@@ -190,6 +195,25 @@ class SongService:
         if cover_prefix:
             return str(PurePosixPath(cover_prefix) / cover_file_name)
         return cover_file_name
+
+    async def _apply_liked_flags(
+        self, tracks: list[TrackResponse]
+    ) -> list[TrackResponse]:
+        """按当前用户收藏关系补充曲目收藏状态。"""
+
+        user_id = self.user_id
+        if user_id is None or not tracks:
+            return tracks
+
+        liked_song_ids = await fetch_liked_song_ids(
+            self.db,
+            user_id=user_id,
+            song_ids=[track.id for track in tracks],
+        )
+        return [
+            track.model_copy(update={"is_liked": track.id in liked_song_ids})
+            for track in tracks
+        ]
 
     async def search_songs(
         self,
@@ -223,7 +247,13 @@ class SongService:
 
             if cached_payload:
                 try:
-                    return SongSearchResponse.model_validate_json(cached_payload)
+                    cached_response = SongSearchResponse.model_validate_json(
+                        cached_payload
+                    )
+                    cached_response.items = await self._apply_liked_flags(
+                        cached_response.items
+                    )
+                    return cached_response
                 except ValidationError:
                     try:
                         await self.redis_client.delete(cache_key)
@@ -255,9 +285,11 @@ class SongService:
                 name=row.name,
                 artist_name=row.artist_name,
                 song_length=row.song_length,
+                is_liked=False,
             )
             for row in page_rows
         ]
+        items = await self._apply_liked_flags(items)
 
         response = SongSearchResponse(
             query=normalized_query,
@@ -269,10 +301,15 @@ class SongService:
 
         if self.redis_client is not None:
             try:
+                cache_response = response.model_copy(deep=True)
+                cache_response.items = [
+                    item.model_copy(update={"is_liked": False})
+                    for item in cache_response.items
+                ]
                 await self.redis_client.setex(
                     cache_key,
                     self._SEARCH_CACHE_TTL_SECONDS,
-                    response.model_dump_json(),
+                    cache_response.model_dump_json(),
                 )
             except Exception:
                 pass
@@ -305,8 +342,9 @@ class SongService:
             artist_name=row.artist_name,
             song_length=row.song_length,
         )
+        liked_track = (await self._apply_liked_flags([base_track]))[0]
         return SongDetailResponse(
-            **base_track.model_dump(),
+            **liked_track.model_dump(),
             language=row.language,
             audio_object_key=row.audio_object_key,
         )
@@ -522,9 +560,11 @@ class SongService:
                 name=row.name,
                 artist_name=row.artist_name,
                 song_length=row.song_length,
+                is_liked=False,
             )
             for row in page_rows
         ]
+        items = await self._apply_liked_flags(items)
         return SongFeedResponse(
             title="新歌速递",
             limit=limit,

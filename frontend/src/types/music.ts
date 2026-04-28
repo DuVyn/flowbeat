@@ -17,6 +17,8 @@ export interface Track {
   coverUrl: string
   /** 播放时长（毫秒） */
   durationMs: number
+  /** 当前用户是否已收藏 */
+  isLiked: boolean
 }
 
 /** 后端 Track DTO（snake_case） */
@@ -27,6 +29,7 @@ export interface TrackDto {
   artist: string
   cover_url: string
   duration_ms: number
+  is_liked: boolean
 }
 
 /** 推荐来源策略 */
@@ -90,6 +93,46 @@ export interface SongSearchResponse {
 export interface SongDetailResponseDto extends TrackDto {
   language: number | null
   audio_object_key: string | null
+}
+
+/** 收藏歌曲条目 DTO */
+export interface FavoriteTrackItemDto extends TrackDto {
+  favorited_at: string
+}
+
+/** 收藏歌曲条目 */
+export interface FavoriteTrackItem extends Track {
+  favoritedAt: string
+}
+
+/** 收藏列表响应 DTO */
+export interface FavoriteSongsResponseDto {
+  limit: number
+  offset: number
+  has_more: boolean
+  items: FavoriteTrackItemDto[]
+}
+
+/** 收藏列表响应 */
+export interface FavoriteSongsResponse {
+  limit: number
+  offset: number
+  hasMore: boolean
+  items: FavoriteTrackItem[]
+}
+
+/** 收藏切换响应 DTO */
+export interface FavoriteToggleResponseDto {
+  song_id: number
+  is_liked: boolean
+  detail: string
+}
+
+/** 收藏切换响应 */
+export interface FavoriteToggleResponse {
+  songId: number
+  isLiked: boolean
+  detail: string
 }
 
 /** 单曲流地址 DTO */

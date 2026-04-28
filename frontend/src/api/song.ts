@@ -18,6 +18,7 @@ function mapTrackDto(dto: TrackDto): Track {
     artist: dto.artist,
     coverUrl: dto.cover_url,
     durationMs: dto.duration_ms,
+    isLiked: dto.is_liked,
   }
 }
 

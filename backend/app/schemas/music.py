@@ -19,6 +19,7 @@ class TrackResponse(BaseModel):
     artist: str
     cover_url: str
     duration_ms: int
+    is_liked: bool = False
 
 
 class SongDetailResponse(TrackResponse):
@@ -99,6 +100,31 @@ class RecordPlayHistoryResponse(BaseModel):
     """记录播放历史响应。"""
 
     detail: str = "记录成功"
+
+
+class FavoriteToggleResponse(BaseModel):
+    """收藏切换响应。"""
+
+    song_id: int = Field(gt=0)
+    is_liked: bool
+    detail: str
+
+
+class FavoriteTrackResponse(TrackResponse):
+    """收藏列表条目。"""
+
+    favorited_at: datetime
+
+
+class FavoriteListResponse(BaseModel):
+    """收藏列表分页响应。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+    has_more: bool
+    items: list[FavoriteTrackResponse]
 
 
 class PlayHistoryItemResponse(TrackResponse):

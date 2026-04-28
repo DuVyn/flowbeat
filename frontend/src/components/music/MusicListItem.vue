@@ -16,16 +16,25 @@ import mockCover from '@/assets/images/default-cover.svg'
 import { formatDuration } from '@/utils/TimeFormat'
 import { useCoverStore } from '@/stores/cover'
 
-const props = defineProps<{
-  /** 歌曲数据 */
-  track: Track
-  /** 列表序号（1-based） */
-  index: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** 歌曲数据 */
+    track: Track
+    /** 列表序号（1-based） */
+    index: number
+    /** 是否显示行内收藏按钮 */
+    showLikeAction?: boolean
+  }>(),
+  {
+    showLikeAction: false,
+  },
+)
 
 const emit = defineEmits<{
   /** 点击播放/选中该曲目 */
   (e: 'play', track: Track): void
+  /** 点击收藏动作 */
+  (e: 'toggle-like', track: Track): void
 }>()
 
 const coverStore = useCoverStore()
@@ -41,11 +50,17 @@ const coverUrl = computed(() => {
 function handlePlay() {
   emit('play', props.track)
 }
+
+function handleToggleLike(event: MouseEvent) {
+  event.stopPropagation()
+  emit('toggle-like', props.track)
+}
 </script>
 
 <template>
   <div
     class="music-list-item"
+    :class="{ 'music-list-item--with-action': showLikeAction }"
     role="row"
     :aria-label="`${track.name} - ${track.artist}`"
     @click="handlePlay"
@@ -79,6 +94,26 @@ function handlePlay() {
 
     <!-- 时长 -->
     <span class="music-list-item__duration">{{ formatDuration(track.durationMs) }}</span>
+
+    <button
+      v-if="showLikeAction"
+      type="button"
+      class="music-list-item__favorite-btn"
+      :class="{ 'music-list-item__favorite-btn--liked': track.isLiked }"
+      :aria-label="track.isLiked ? '取消收藏' : '收藏歌曲'"
+      @click="handleToggleLike"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        :fill="track.isLiked ? 'currentColor' : 'none'"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path
+          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+        />
+      </svg>
+    </button>
   </div>
 </template>
 
@@ -98,6 +133,10 @@ function handlePlay() {
     background-color 0.2s ease,
     transform 0.15s ease;
   user-select: none;
+}
+
+.music-list-item--with-action {
+  grid-template-columns: 2rem 1fr 4rem auto;
 }
 
 .music-list-item:hover {
@@ -202,6 +241,40 @@ function handlePlay() {
   font-variant-numeric: tabular-nums;
 }
 
+.music-list-item__favorite-btn {
+  border: none;
+  background: transparent;
+  color: rgba(239, 68, 68, 0.45);
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.15s ease;
+}
+
+.music-list-item__favorite-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.music-list-item__favorite-btn:hover {
+  background: rgba(239, 68, 68, 0.08);
+  color: rgba(239, 68, 68, 0.85);
+}
+
+.music-list-item__favorite-btn--liked {
+  color: #ef4444;
+}
+
+.music-list-item__favorite-btn:active {
+  transform: scale(0.96);
+}
+
 /* ========================================
  * 响应式：移动端
  * ======================================== */
@@ -210,6 +283,10 @@ function handlePlay() {
     grid-template-columns: 1.5rem 1fr 3.5rem;
     gap: 0.5rem;
     padding: 0.5rem 0.75rem;
+  }
+
+  .music-list-item--with-action {
+    grid-template-columns: 1.5rem 1fr 3.5rem auto;
   }
 }
 </style>

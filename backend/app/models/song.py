@@ -17,6 +17,7 @@ from app.models.song_meta import Composer, Genre, Lyricist
 if TYPE_CHECKING:
     from app.models.play_count import PlayCount
     from app.models.play_history import PlayHistory
+    from app.models.user_favorite import UserFavorite
 
 
 class Song(Base):
@@ -55,6 +56,10 @@ class Song(Base):
     )
     # 歌曲被播放历史引用，一对多关系。
     play_histories: Mapped[List["PlayHistory"]] = relationship(
+        back_populates="song", cascade="all, delete-orphan", lazy="selectin"
+    )
+    # 歌曲被用户收藏引用，一对多关系。
+    favorites: Mapped[List["UserFavorite"]] = relationship(
         back_populates="song", cascade="all, delete-orphan", lazy="selectin"
     )
     # 歌曲播放次数聚合，一对一关系（每首歌一行）。

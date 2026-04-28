@@ -17,14 +17,33 @@ from app.schemas.music import (
     RecordPlayHistoryRequest,
     RecordPlayHistoryResponse,
 )
+from app.services.favorite_service import fetch_liked_song_ids
 from app.services.track_mapper import to_track_response
 
 
 class PlayHistoryService:
     """用户播放历史写入与查询服务。"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, *, user_id: int | None = None):
         self.db = db
+        self.user_id = user_id
+
+    async def _apply_liked_flags(self, tracks: list) -> list:
+        """按当前用户收藏关系补充曲目收藏状态。"""
+
+        user_id = self.user_id
+        if user_id is None or not tracks:
+            return tracks
+
+        liked_song_ids = await fetch_liked_song_ids(
+            self.db,
+            user_id=user_id,
+            song_ids=[track.id for track in tracks],
+        )
+        return [
+            track.model_copy(update={"is_liked": track.id in liked_song_ids})
+            for track in tracks
+        ]
 
     async def record_play_history(
         self,
@@ -86,6 +105,7 @@ class PlayHistoryService:
                 name=song_name,
                 artist_name=artist_name,
                 song_length=song_length,
+                is_liked=False,
             )
             items.append(
                 PlayHistoryItemResponse(
@@ -93,6 +113,8 @@ class PlayHistoryService:
                     played_at=played_at,
                 )
             )
+
+        items = await self._apply_liked_flags(items)
 
         return PlayHistoryResponse(
             limit=limit,
@@ -133,11 +155,14 @@ class PlayHistoryService:
             name=song_name,
             artist_name=artist_name,
             song_length=song_length,
+            is_liked=False,
         )
-        return PlayHistoryItemResponse(
+        item = PlayHistoryItemResponse(
             **base_track.model_dump(),
             played_at=played_at,
         )
+        flagged_items = await self._apply_liked_flags([item])
+        return flagged_items[0]
 
     async def clear_play_history(self, *, user_id: int) -> ClearPlayHistoryResponse:
         """清空当前用户的播放历史。"""

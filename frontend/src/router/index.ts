@@ -66,6 +66,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '历史播放', requiresAuth: true },
       },
       {
+        path: 'favorites',
+        name: 'Favorites',
+        component: () => import('@/views/user/FavoritesPage.vue'),
+        meta: { title: '我喜欢', requiresAuth: true },
+      },
+      {
         path: 'search',
         name: 'Search',
         component: () => import('@/views/search/SearchPage.vue'),

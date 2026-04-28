@@ -12,6 +12,7 @@ def to_track_response(
     name: str | None,
     artist_name: str | None,
     song_length: int | None,
+    is_liked: bool = False,
 ) -> TrackResponse:
     """将歌曲基础字段转换为前端 Track 结构。"""
     return TrackResponse(
@@ -21,4 +22,5 @@ def to_track_response(
         artist=artist_name or "未知艺术家",
         cover_url="",
         duration_ms=song_length or 0,
+        is_liked=is_liked,
     )

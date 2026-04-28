@@ -11,6 +11,7 @@ from app.models.play_history import PlayHistory
 from app.models.song import Song
 from app.models.song_meta import Composer, Genre, Lyricist
 from app.models.user import User
+from app.models.user_favorite import UserFavorite
 from app.models.user_session import UserSession
 
 # 显式声明对外暴露的模块
@@ -22,6 +23,7 @@ __all__ = [
     "PlayCount",
     "PlayHistory",
     "User",
+    "UserFavorite",
     "UserSession",
     "song_genre_m2m",
     "song_composer_m2m",

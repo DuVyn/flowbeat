@@ -30,7 +30,7 @@ async def record_play_history(
     db: AsyncSession = Depends(get_db_session),
 ) -> RecordPlayHistoryResponse:
     """记录当前用户一次播放。"""
-    service = PlayHistoryService(db)
+    service = PlayHistoryService(db, user_id=auth_context.user.id)
     return await service.record_play_history(
         user_id=auth_context.user.id, payload=payload
     )
@@ -44,7 +44,7 @@ async def get_play_history(
     db: AsyncSession = Depends(get_db_session),
 ) -> PlayHistoryResponse:
     """分页获取当前用户最近播放历史。"""
-    service = PlayHistoryService(db)
+    service = PlayHistoryService(db, user_id=auth_context.user.id)
     return await service.get_play_history(
         user_id=auth_context.user.id,
         limit=limit,
@@ -59,7 +59,7 @@ async def get_latest_play_history(
 ) -> PlayHistoryItemResponse:
     """获取当前用户最近一次播放记录。"""
 
-    service = PlayHistoryService(db)
+    service = PlayHistoryService(db, user_id=auth_context.user.id)
     latest_item = await service.get_latest_play_history(user_id=auth_context.user.id)
     if latest_item is None:
         raise HTTPException(
@@ -75,5 +75,5 @@ async def clear_play_history(
 ) -> ClearPlayHistoryResponse:
     """清空当前用户的播放历史。"""
 
-    service = PlayHistoryService(db)
+    service = PlayHistoryService(db, user_id=auth_context.user.id)
     return await service.clear_play_history(user_id=auth_context.user.id)

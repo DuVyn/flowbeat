@@ -11,6 +11,7 @@
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
+import { toggleFavorite } from '@/api/favorites'
 import mockCover from '@/assets/images/default-cover.svg'
 import { useCoverStore } from '@/stores/cover'
 import { usePlayerStore } from '@/stores/player'
@@ -30,7 +31,7 @@ const {
   errorMessage,
 } = storeToRefs(playerStore)
 
-const isLiked = ref(false)
+const isTogglingLike = ref(false)
 
 const displayTitle = computed(() => currentTrack.value?.name ?? '未选择歌曲')
 const displayArtist = computed(() => currentTrack.value?.artist ?? '等待播放')
@@ -73,8 +74,28 @@ function nextTrack() {
   void playerStore.nextTrack()
 }
 function toggleLike() {
-  isLiked.value = !isLiked.value
+  void handleToggleLike()
 }
+async function handleToggleLike(): Promise<void> {
+  const track = currentTrack.value
+  if (!track || isTogglingLike.value) {
+    return
+  }
+
+  const previousLikedState = track.isLiked
+  isTogglingLike.value = true
+  track.isLiked = !previousLikedState
+
+  try {
+    const response = await toggleFavorite(track.id)
+    track.isLiked = response.isLiked
+  } catch {
+    track.isLiked = previousLikedState
+  } finally {
+    isTogglingLike.value = false
+  }
+}
+
 function toggleMute() {
   playerStore.toggleMute()
 }
@@ -108,12 +129,13 @@ watch(currentTrack, (track) => {
       </div>
       <button
         class="player__icon-btn"
-        :class="{ 'player__icon-btn--liked': isLiked }"
+        :class="{ 'player__icon-btn--liked': currentTrack?.isLiked }"
+        :disabled="isTogglingLike"
         @click="toggleLike"
       >
         <svg
           viewBox="0 0 24 24"
-          :fill="isLiked ? 'currentColor' : 'none'"
+          :fill="currentTrack?.isLiked ? 'currentColor' : 'none'"
           stroke="currentColor"
           stroke-width="2"
         >

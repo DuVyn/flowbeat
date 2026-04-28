@@ -18,6 +18,7 @@ from app.schemas.music import (
     RecommendationStrategy,
     TrackResponse,
 )
+from app.services.favorite_service import fetch_liked_song_ids
 from app.services.track_mapper import to_track_response
 
 
@@ -54,9 +55,35 @@ class RecommendationService:
         """兼容早期实现的内容推荐 key。"""
         return f"rec:user:{user_id}:content:v{cls._CONTENT_KEY_VERSION}"
 
-    def __init__(self, db: AsyncSession, redis_client: Redis):
+    def __init__(
+        self,
+        db: AsyncSession,
+        redis_client: Redis,
+        *,
+        user_id: int | None = None,
+    ):
         self.db = db
         self.redis_client = redis_client
+        self.user_id = user_id
+
+    async def _apply_liked_flags(
+        self, tracks: list[TrackResponse]
+    ) -> list[TrackResponse]:
+        """按当前用户收藏关系补充曲目收藏状态。"""
+
+        user_id = self.user_id
+        if user_id is None or not tracks:
+            return tracks
+
+        liked_song_ids = await fetch_liked_song_ids(
+            self.db,
+            user_id=user_id,
+            song_ids=[track.id for track in tracks],
+        )
+        return [
+            track.model_copy(update={"is_liked": track.id in liked_song_ids})
+            for track in tracks
+        ]
 
     async def _get_hot_total(self) -> int:
         """读取热门总数，优先使用 Redis 缓存。"""
@@ -112,6 +139,7 @@ class RecommendationService:
                     name=row.name,
                     artist_name=row.artist_name,
                     song_length=row.song_length,
+                    is_liked=False,
                 )
             )
         return tracks
@@ -133,6 +161,9 @@ class RecommendationService:
             try:
                 cached_payload = HotRecommendationsResponse.model_validate_json(cached)
                 if self._is_hot_cache_valid(cached_payload):
+                    cached_payload.items = await self._apply_liked_flags(
+                        cached_payload.items
+                    )
                     return cached_payload
                 try:
                     await self.redis_client.delete(cache_key)
@@ -156,6 +187,7 @@ class RecommendationService:
             int(song_pk) for song_pk in (await self.db.scalars(top_song_stmt)).all()
         ]
         tracks = await self._load_tracks_by_song_pk_ids(song_pk_ids)
+        tracks = await self._apply_liked_flags(tracks)
 
         response = HotRecommendationsResponse(
             limit=limit,
@@ -165,7 +197,12 @@ class RecommendationService:
         )
 
         try:
-            await self.redis_client.set(cache_key, response.model_dump_json())
+            cache_response = response.model_copy(deep=True)
+            cache_response.items = [
+                item.model_copy(update={"is_liked": False})
+                for item in cache_response.items
+            ]
+            await self.redis_client.set(cache_key, cache_response.model_dump_json())
         except Exception:
             # 缓存写入失败不应影响主流程，仍返回数据库结果。
             pass
@@ -243,7 +280,7 @@ class RecommendationService:
             limit=limit,
             offset=offset,
             total=total,
-            items=page_tracks,
+            items=await self._apply_liked_flags(page_tracks),
         )
 
     async def _load_tracks_by_song_ids(
@@ -275,6 +312,7 @@ class RecommendationService:
                     name=row.name,
                     artist_name=row.artist_name,
                     song_length=row.song_length,
+                    is_liked=False,
                 )
             )
         return tracks

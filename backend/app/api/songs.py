@@ -8,6 +8,7 @@ from minio import Minio
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import AuthContext, get_auth_context
 from app.core.cache import get_redis_client
 from app.core.storage import get_minio_client
 from app.db.session import get_db_session
@@ -29,11 +30,12 @@ async def search_songs(
     query: str = Query(alias="q", min_length=1, max_length=100),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db_session),
     redis_client: Redis = Depends(get_redis_client),
 ) -> SongSearchResponse:
     """按关键词搜索歌曲。"""
-    service = SongService(db, redis_client=redis_client)
+    service = SongService(db, redis_client=redis_client, user_id=auth_context.user.id)
     return await service.search_songs(query=query, limit=limit, offset=offset)
 
 
@@ -41,21 +43,23 @@ async def search_songs(
 async def get_latest_songs(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db_session),
 ) -> SongFeedResponse:
     """获取最近入库的歌曲。"""
 
-    service = SongService(db)
+    service = SongService(db, user_id=auth_context.user.id)
     return await service.get_latest_songs(limit=limit, offset=offset)
 
 
 @router.get("/{song_id}/detail", response_model=SongDetailResponse)
 async def get_song_detail(
     song_id: int,
+    auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db_session),
 ) -> SongDetailResponse:
     """获取单首歌曲详情。"""
-    service = SongService(db)
+    service = SongService(db, user_id=auth_context.user.id)
     return await service.get_song_detail(song_id)
 
 
