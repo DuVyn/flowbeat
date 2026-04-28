@@ -4,22 +4,16 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 
-# ---------------------------------------------------------------------------
-# Dataclass 定义
-# ---------------------------------------------------------------------------
-
 @dataclass(slots=True)
 class PathsConfig:
-    """根据环境决定的 I/O 路径集合。"""
+    """I/O 路径集合。"""
     user_features_csv: str
     item_features_csv: str
     train_interactions_csv: str
     test_interactions_csv: str
-    artifacts_dir: str
     checkpoint_dir: str
     embedding_dir: str
     report_dir: str
@@ -61,66 +55,32 @@ class CloudConfig:
 @dataclass(slots=True)
 class TrainingConfig:
     """顶层配置聚合。"""
-    environment: str  # "local" | "cloud"
+    environment: str
     seed: int
     paths: PathsConfig
     model_params: ModelParams
     train_params: TrainParams
-    cloud: CloudConfig
+    cloud: CloudConfig | None
 
 
-# ---------------------------------------------------------------------------
-# 解析工具
-# ---------------------------------------------------------------------------
-
-def _pick_paths(raw: dict[str, Any], environment: str) -> dict[str, Any]:
-    """从 paths.<environment> 分支提取路径映射。"""
-    paths_block = raw.get("paths") or {}
-    env_paths = paths_block.get(environment)
-    if not env_paths or not isinstance(env_paths, dict):
-        raise ValueError(
-            f"配置文件中缺少 paths.{environment} 分支，"
-            f"可用分支: {list(paths_block.keys())}"
-        )
-    return dict(env_paths)
-
-
-def parse_config(
-    raw: dict[str, Any],
-    *,
-    env_override: str | None = None,
-) -> TrainingConfig:
-    """将原始 YAML dict 解析为 TrainingConfig。
-
-    Parameters
-    ----------
-    raw : dict
-        由 ``yaml.safe_load()`` 读取的字典。
-    env_override : str | None
-        命令行 ``--env`` 参数，若提供则覆盖配置文件中的 ``environment``。
-
-    Returns
-    -------
-    TrainingConfig
-        解析并校验后的结构化配置。
-    """
-    environment = (env_override or raw.get("environment", "local")).strip().lower()
+def parse_config(raw: dict[str, Any]) -> TrainingConfig:
+    """将原始 YAML dict 解析为 TrainingConfig。"""
+    environment = str(raw.get("environment", "local")).strip().lower()
     if environment not in {"local", "cloud"}:
         raise ValueError(f"environment 必须为 'local' 或 'cloud'，当前值: {environment}")
 
     seed = int(raw.get("seed", 20260428))
 
-    # -- paths --
-    env_paths = _pick_paths(raw, environment)
+    # -- paths（扁平结构） --
+    p = dict(raw.get("paths") or {})
     paths = PathsConfig(
-        user_features_csv=str(env_paths["user_features_csv"]),
-        item_features_csv=str(env_paths["item_features_csv"]),
-        train_interactions_csv=str(env_paths["train_interactions_csv"]),
-        test_interactions_csv=str(env_paths["test_interactions_csv"]),
-        artifacts_dir=str(env_paths.get("artifacts_dir", "")),
-        checkpoint_dir=str(env_paths.get("checkpoint_dir", "")),
-        embedding_dir=str(env_paths.get("embedding_dir", "")),
-        report_dir=str(env_paths.get("report_dir", "")),
+        user_features_csv=str(p["user_features_csv"]),
+        item_features_csv=str(p["item_features_csv"]),
+        train_interactions_csv=str(p["train_interactions_csv"]),
+        test_interactions_csv=str(p["test_interactions_csv"]),
+        checkpoint_dir=str(p.get("checkpoint_dir", "")),
+        embedding_dir=str(p.get("embedding_dir", "")),
+        report_dir=str(p.get("report_dir", "")),
     )
 
     # -- model_params --
@@ -147,14 +107,16 @@ def parse_config(
         resume_from=str(tp.get("resume_from", "last")),
     )
 
-    # -- cloud --
-    cc = dict(raw.get("cloud") or {})
-    cloud = CloudConfig(
-        provider=str(cc.get("provider", "cos")),
-        region=str(cc.get("region", "ap-guangzhou")),
-        secret_id_env=str(cc.get("secret_id_env", "COS_SECRET_ID")),
-        secret_key_env=str(cc.get("secret_key_env", "COS_SECRET_KEY")),
-    )
+    # -- cloud（仅 cloud 环境需要） --
+    cloud: CloudConfig | None = None
+    if environment == "cloud":
+        cc = dict(raw.get("cloud") or {})
+        cloud = CloudConfig(
+            provider=str(cc.get("provider", "cos")),
+            region=str(cc.get("region", "ap-guangzhou")),
+            secret_id_env=str(cc.get("secret_id_env", "COS_SECRET_ID")),
+            secret_key_env=str(cc.get("secret_key_env", "COS_SECRET_KEY")),
+        )
 
     return TrainingConfig(
         environment=environment,

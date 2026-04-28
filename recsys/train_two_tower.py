@@ -2,15 +2,14 @@
 
 用法:
     cd recsys
-    uv run python train_two_tower.py --config configs/two_tower/config.yaml
-    uv run python train_two_tower.py --config configs/two_tower/config.yaml --env cloud
+    uv run python train_two_tower.py --config configs/two_tower/config_local.yaml
+    uv run python train_two_tower.py --config configs/two_tower/config_cloud.yaml
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -29,7 +28,6 @@ RECSYS_ROOT = CURRENT_FILE.parent
 
 
 def _detect_workspace_root() -> Path:
-    """向上查找包含 recsys/ 和 data/ 的项目根目录。"""
     for candidate in (RECSYS_ROOT, *RECSYS_ROOT.parents):
         if (candidate / "recsys").is_dir() and (candidate / "data").is_dir():
             return candidate
@@ -42,24 +40,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--config",
-        default="configs/two_tower/config.yaml",
+        default="configs/two_tower/config_local.yaml",
         help="YAML 配置文件路径（相对于 recsys/ 或绝对路径）",
-    )
-    parser.add_argument(
-        "--env",
-        default=None,
-        choices=["local", "cloud"],
-        help="覆盖配置文件中的 environment 字段",
     )
     return parser
 
 
 def _resolve_config_path(raw: str) -> Path:
-    """从多个候选位置查找配置文件。"""
     p = Path(raw).expanduser()
     if p.is_absolute() and p.exists():
         return p.resolve()
-
     candidates = [
         Path.cwd() / raw,
         RECSYS_ROOT / raw,
@@ -69,20 +59,17 @@ def _resolve_config_path(raw: str) -> Path:
     for c in candidates:
         if c.exists():
             return c.resolve()
-
-    raise FileNotFoundError(f"找不到配置文件: {raw}（已搜索 {[str(c) for c in candidates]}）")
+    raise FileNotFoundError(f"找不到配置文件: {raw}")
 
 
 def run(cfg: TrainingConfig, workspace_root: Path) -> dict[str, Any]:
     """根据配置执行完整训练流程。"""
-    # 1. 创建存储后端
     backend = create_backend(
         cfg.environment,
         workspace_root=workspace_root,
-        cloud_config=cfg.cloud if cfg.environment == "cloud" else None,
+        cloud_config=cfg.cloud,
     )
 
-    # 2. 加载数据集
     train_loader, test_loader, data_summary = load_datasets(
         backend,
         train_csv=cfg.paths.train_interactions_csv,
@@ -91,7 +78,6 @@ def run(cfg: TrainingConfig, workspace_root: Path) -> dict[str, Any]:
         seed=cfg.seed,
     )
 
-    # 3. 构建模型
     device = resolve_device(cfg.train_params.device)
     model = build_model(
         cfg.model_params,
@@ -99,7 +85,6 @@ def run(cfg: TrainingConfig, workspace_root: Path) -> dict[str, Any]:
         num_items=data_summary.num_items,
     )
 
-    # 4. 执行训练
     result = train(
         model=model,
         train_loader=train_loader,
@@ -128,7 +113,7 @@ def main() -> None:
     print(f"[Main] 配置文件: {config_path}", flush=True)
 
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    cfg = parse_config(raw, env_override=args.env)
+    cfg = parse_config(raw)
 
     print(f"[Main] 运行环境: {cfg.environment}", flush=True)
     print(f"[Main] 随机种子: {cfg.seed}", flush=True)

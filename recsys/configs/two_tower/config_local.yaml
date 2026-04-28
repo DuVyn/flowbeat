@@ -1,0 +1,38 @@
+# ============================================================================
+# FlowBeat Two-Tower 训练配置 — 本地环境
+# ============================================================================
+# 用法: uv run python train_two_tower.py --config configs/two_tower/config_local.yaml
+# ============================================================================
+
+environment: local
+seed: 20260428
+
+# ---------- I/O 路径（相对于项目根目录） ----------
+paths:
+  user_features_csv:      "data/for_two_power/user_features.csv"
+  item_features_csv:      "data/for_two_power/item_features.csv"
+  train_interactions_csv: "data/for_two_power/train_interactions.csv"
+  test_interactions_csv:  "data/for_two_power/test_interactions.csv"
+  checkpoint_dir: "recsys/artifacts/two_tower/checkpoints"
+  embedding_dir:  "recsys/artifacts/two_tower/embeddings"
+  report_dir:     "recsys/artifacts/two_tower/reports"
+
+# ---------- 模型超参数 ----------
+model_params:
+  embedding_dim: 64
+  hidden_units: [128, 64]
+  dropout: 0.1
+
+# ---------- 训练超参数 ----------
+train_params:
+  batch_size: 512
+  learning_rate: 0.001
+  weight_decay: 1.0e-5
+  epochs: 10
+  device: "auto"
+  num_workers: 2
+  pin_memory: true
+  log_every_steps: 200
+  early_stopping_patience: 3
+  resume: false
+  resume_from: "last"
