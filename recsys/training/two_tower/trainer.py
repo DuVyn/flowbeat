@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import math
 import random
 import time
-from dataclasses import asdict, dataclass
+from collections.abc import Sized
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, cast
 
 import torch
 from torch import nn
@@ -23,6 +22,7 @@ from training.two_tower.storage_backend import StorageBackend
 @dataclass(slots=True)
 class TrainResult:
     """训练结果摘要。"""
+
     run_dir: str
     device: str
     num_users: int
@@ -58,12 +58,18 @@ def _binary_auc(labels: torch.Tensor, scores: torch.Tensor) -> float:
         return 0.5
     order = torch.argsort(scores)
     ranks = torch.empty_like(order, dtype=torch.float32)
-    ranks[order] = torch.arange(1, order.numel() + 1, dtype=torch.float32, device=scores.device)
-    return float((ranks[pos_mask].sum().item() - pos_n * (pos_n + 1) / 2) / (pos_n * neg_n))
+    ranks[order] = torch.arange(
+        1, order.numel() + 1, dtype=torch.float32, device=scores.device
+    )
+    return float(
+        (ranks[pos_mask].sum().item() - pos_n * (pos_n + 1) / 2) / (pos_n * neg_n)
+    )
 
 
 @torch.no_grad()
-def _evaluate(model: TwoTowerModel, loader: DataLoader, criterion: nn.Module, device: torch.device):
+def _evaluate(
+    model: TwoTowerModel, loader: DataLoader, criterion: nn.Module, device: torch.device
+):
     model.eval()
     total_loss, total_n = 0.0, 0
     all_scores, all_labels = [], []
@@ -154,8 +160,8 @@ def train(
         else:
             _log(f"未找到 checkpoint ({resume_path})，从头开始训练")
 
-    train_samples = len(train_loader.dataset)
-    test_samples = len(test_loader.dataset)
+    train_samples = len(cast(Sized, train_loader.dataset))
+    test_samples = len(cast(Sized, test_loader.dataset))
     est_steps = max(1, math.ceil(train_samples / train_params.batch_size))
 
     _log(
@@ -187,20 +193,24 @@ def train(
             if step == 1 or step % log_every == 0:
                 rl = loss_sum / max(1, n_sum)
                 pct = n_sum / train_samples * 100
-                _log(f"[Epoch {epoch}/{epochs}] step={step}/{est_steps} ({pct:.1f}%) loss={rl:.6f}")
+                _log(
+                    f"[Epoch {epoch}/{epochs}] step={step}/{est_steps} ({pct:.1f}%) loss={rl:.6f}"
+                )
 
         final_train_loss = loss_sum / max(1, n_sum)
         test_loss, test_auc = _evaluate(model, test_loader, criterion, device)
         final_test_loss = test_loss
         cost = time.perf_counter() - t0
 
-        history.append({
-            "epoch": epoch,
-            "train_loss": round(final_train_loss, 8),
-            "test_loss": round(test_loss, 8),
-            "test_auc": round(test_auc, 8),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        history.append(
+            {
+                "epoch": epoch,
+                "train_loss": round(final_train_loss, 8),
+                "test_loss": round(test_loss, 8),
+                "test_auc": round(test_auc, 8),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
         improved = test_loss < best_loss
         if improved:

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import importlib
 import io
 import json
 import os
@@ -18,12 +19,12 @@ from typing import Any
 import pandas as pd
 import torch
 
-from training.two_tower.config_schema import CloudConfig, PathsConfig
-
+from training.two_tower.config_schema import CloudConfig
 
 # ---------------------------------------------------------------------------
 # 抽象基类
 # ---------------------------------------------------------------------------
+
 
 class StorageBackend(ABC):
     """文件 I/O 后端抽象。"""
@@ -60,6 +61,7 @@ class StorageBackend(ABC):
 # ---------------------------------------------------------------------------
 # Local 实现
 # ---------------------------------------------------------------------------
+
 
 class LocalBackend(StorageBackend):
     """基于本地文件系统的存储后端。"""
@@ -114,6 +116,7 @@ class LocalBackend(StorageBackend):
 # Cloud 实现
 # ---------------------------------------------------------------------------
 
+
 class CloudBackend(StorageBackend):
     """基于对象存储 SDK 的云端存储后端。
 
@@ -131,9 +134,7 @@ class CloudBackend(StorageBackend):
         self.region = cloud_config.region
         self.secret_id = os.environ.get(cloud_config.secret_id_env, "")
         self.secret_key = os.environ.get(cloud_config.secret_key_env, "")
-        self._local_cache = (
-            local_cache_dir or Path.cwd() / ".cloud_cache"
-        ).resolve()
+        self._local_cache = (local_cache_dir or Path.cwd() / ".cloud_cache").resolve()
         self._local_cache.mkdir(parents=True, exist_ok=True)
         self._client: Any = None
 
@@ -144,27 +145,25 @@ class CloudBackend(StorageBackend):
 
         if self.provider == "cos":
             try:
-                from qcloud_cos import CosConfig, CosS3Client
+                qcloud_cos = importlib.import_module("qcloud_cos")
             except ImportError as exc:
                 raise ImportError(
                     "云端模式需要 cos-python-sdk-v5：pip install cos-python-sdk-v5"
                 ) from exc
 
-            config = CosConfig(
+            config = qcloud_cos.CosConfig(
                 Region=self.region,
                 SecretId=self.secret_id,
                 SecretKey=self.secret_key,
             )
-            self._client = CosS3Client(config)
+            self._client = qcloud_cos.CosS3Client(config)
             return self._client
 
         if self.provider == "s3":
             try:
-                import boto3
+                boto3 = importlib.import_module("boto3")
             except ImportError as exc:
-                raise ImportError(
-                    "云端模式需要 boto3：pip install boto3"
-                ) from exc
+                raise ImportError("云端模式需要 boto3：pip install boto3") from exc
             self._client = boto3.client(
                 "s3",
                 region_name=self.region,
@@ -180,7 +179,7 @@ class CloudBackend(StorageBackend):
         """将 cos://bucket/key 或 s3://bucket/key 解析为 (bucket, key)。"""
         for prefix in ("cos://", "s3://", "gs://"):
             if uri.startswith(prefix):
-                remainder = uri[len(prefix):]
+                remainder = uri[len(prefix) :]
                 parts = remainder.split("/", 1)
                 bucket = parts[0]
                 key = parts[1] if len(parts) > 1 else ""
@@ -188,10 +187,7 @@ class CloudBackend(StorageBackend):
         raise ValueError(f"无法解析云存储 URI: {uri}")
 
     def _is_cloud_uri(self, path: str) -> bool:
-        return any(
-            path.startswith(prefix)
-            for prefix in ("cos://", "s3://", "gs://")
-        )
+        return any(path.startswith(prefix) for prefix in ("cos://", "s3://", "gs://"))
 
     def _download_to_buffer(self, path: str) -> io.BytesIO:
         """从云端下载对象到内存缓冲区。"""
@@ -295,6 +291,7 @@ class CloudBackend(StorageBackend):
 # ---------------------------------------------------------------------------
 # 工厂函数
 # ---------------------------------------------------------------------------
+
 
 def create_backend(
     environment: str,
