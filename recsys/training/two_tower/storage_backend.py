@@ -2,7 +2,7 @@
 
 根据 environment 配置自动选择底层实现：
 - LocalBackend：标准本地文件系统操作
-- CloudBackend：通过对象存储 SDK（如 COS / S3）进行读写
+- CloudBackend：通过对象存储 SDK（如 OSS / COS / S3）进行读写
 """
 
 from __future__ import annotations
@@ -120,7 +120,7 @@ class LocalBackend(StorageBackend):
 class CloudBackend(StorageBackend):
     """基于对象存储 SDK 的云端存储后端。
 
-    当前以 Tencent COS 为默认实现。若需切换至 S3 / GCS，
+    当前以阿里云 OSS 为默认实现。若需切换至 S3 / COS，
     可扩展 ``_get_client()`` 或增加子类。
     """
 
@@ -131,16 +131,30 @@ class CloudBackend(StorageBackend):
         local_cache_dir: Path | None = None,
     ) -> None:
         self.provider = cloud_config.provider.lower()
-        self.region = cloud_config.region
+        self.endpoint = cloud_config.endpoint
+        self.region = "ap-guangzhou"
         self.secret_id = os.environ.get(cloud_config.secret_id_env, "")
         self.secret_key = os.environ.get(cloud_config.secret_key_env, "")
         self._local_cache = (local_cache_dir or Path.cwd() / ".cloud_cache").resolve()
         self._local_cache.mkdir(parents=True, exist_ok=True)
         self._client: Any = None
+        self._bucket_cache: dict[str, Any] = {}
 
     def _get_client(self) -> Any:
         """按需初始化云 SDK 客户端。"""
         if self._client is not None:
+            return self._client
+
+        if self.provider == "oss":
+            try:
+                oss2 = importlib.import_module("oss2")
+            except ImportError as exc:
+                raise ImportError("云端模式需要 oss2：pip install oss2") from exc
+
+            self._client = {
+                "oss2": oss2,
+                "auth": oss2.Auth(self.secret_id, self.secret_key),
+            }
             return self._client
 
         if self.provider == "cos":
@@ -174,10 +188,23 @@ class CloudBackend(StorageBackend):
 
         raise ValueError(f"不支持的云存储提供商: {self.provider}")
 
+    def _get_bucket(self, bucket_name: str) -> Any:
+        if self.provider != "oss":
+            raise ValueError("_get_bucket 仅用于 OSS 提供商。")
+
+        if bucket_name in self._bucket_cache:
+            return self._bucket_cache[bucket_name]
+
+        client = self._get_client()
+        oss2 = client["oss2"]
+        bucket = oss2.Bucket(client["auth"], self.endpoint, bucket_name)
+        self._bucket_cache[bucket_name] = bucket
+        return bucket
+
     @staticmethod
     def _parse_uri(uri: str) -> tuple[str, str]:
-        """将 cos://bucket/key 或 s3://bucket/key 解析为 (bucket, key)。"""
-        for prefix in ("cos://", "s3://", "gs://"):
+        """将 oss://bucket/key、cos://bucket/key 或 s3://bucket/key 解析为 (bucket, key)。"""
+        for prefix in ("oss://", "cos://", "s3://", "gs://"):
             if uri.startswith(prefix):
                 remainder = uri[len(prefix) :]
                 parts = remainder.split("/", 1)
@@ -187,14 +214,18 @@ class CloudBackend(StorageBackend):
         raise ValueError(f"无法解析云存储 URI: {uri}")
 
     def _is_cloud_uri(self, path: str) -> bool:
-        return any(path.startswith(prefix) for prefix in ("cos://", "s3://", "gs://"))
+        return any(
+            path.startswith(prefix) for prefix in ("oss://", "cos://", "s3://", "gs://")
+        )
 
     def _download_to_buffer(self, path: str) -> io.BytesIO:
         """从云端下载对象到内存缓冲区。"""
         bucket, key = self._parse_uri(path)
         client = self._get_client()
 
-        if self.provider == "cos":
+        if self.provider == "oss":
+            body = self._get_bucket(bucket).get_object(key).read()
+        elif self.provider == "cos":
             response = client.get_object(Bucket=bucket, Key=key)
             body = response["Body"].get_raw_stream().read()
         elif self.provider == "s3":
@@ -212,7 +243,9 @@ class CloudBackend(StorageBackend):
         bucket, key = self._parse_uri(remote_path)
         client = self._get_client()
 
-        if self.provider == "cos":
+        if self.provider == "oss":
+            self._get_bucket(bucket).put_object_from_file(key, str(local_path))
+        elif self.provider == "cos":
             client.upload_file(
                 Bucket=bucket,
                 Key=key,
@@ -274,6 +307,8 @@ class CloudBackend(StorageBackend):
         try:
             bucket, key = self._parse_uri(path)
             client = self._get_client()
+            if self.provider == "oss":
+                return bool(self._get_bucket(bucket).object_exists(key))
             if self.provider == "cos":
                 client.head_object(Bucket=bucket, Key=key)
             elif self.provider == "s3":

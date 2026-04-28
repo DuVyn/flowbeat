@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -10,6 +9,7 @@ from typing import Any
 @dataclass(slots=True)
 class PathsConfig:
     """I/O 路径集合。"""
+
     user_features_csv: str
     item_features_csv: str
     train_interactions_csv: str
@@ -22,6 +22,7 @@ class PathsConfig:
 @dataclass(slots=True)
 class ModelParams:
     """双塔网络超参数。"""
+
     embedding_dim: int = 64
     hidden_units: list[int] = field(default_factory=lambda: [128, 64])
     dropout: float = 0.1
@@ -30,6 +31,7 @@ class ModelParams:
 @dataclass(slots=True)
 class TrainParams:
     """训练相关超参数。"""
+
     batch_size: int = 512
     learning_rate: float = 1e-3
     weight_decay: float = 1e-5
@@ -46,15 +48,17 @@ class TrainParams:
 @dataclass(slots=True)
 class CloudConfig:
     """云端 SDK 相关配置。"""
-    provider: str = "cos"
-    region: str = "ap-guangzhou"
-    secret_id_env: str = "COS_SECRET_ID"
-    secret_key_env: str = "COS_SECRET_KEY"
+
+    provider: str = "oss"
+    endpoint: str = "https://oss-cn-guangzhou.aliyuncs.com"
+    secret_id_env: str = "OSS_ACCESS_KEY_ID"
+    secret_key_env: str = "OSS_ACCESS_KEY_SECRET"
 
 
 @dataclass(slots=True)
 class TrainingConfig:
     """顶层配置聚合。"""
+
     environment: str
     seed: int
     paths: PathsConfig
@@ -67,7 +71,9 @@ def parse_config(raw: dict[str, Any]) -> TrainingConfig:
     """将原始 YAML dict 解析为 TrainingConfig。"""
     environment = str(raw.get("environment", "local")).strip().lower()
     if environment not in {"local", "cloud"}:
-        raise ValueError(f"environment 必须为 'local' 或 'cloud'，当前值: {environment}")
+        raise ValueError(
+            f"environment 必须为 'local' 或 'cloud'，当前值: {environment}"
+        )
 
     seed = int(raw.get("seed", 20260428))
 
@@ -112,10 +118,10 @@ def parse_config(raw: dict[str, Any]) -> TrainingConfig:
     if environment == "cloud":
         cc = dict(raw.get("cloud") or {})
         cloud = CloudConfig(
-            provider=str(cc.get("provider", "cos")),
-            region=str(cc.get("region", "ap-guangzhou")),
-            secret_id_env=str(cc.get("secret_id_env", "COS_SECRET_ID")),
-            secret_key_env=str(cc.get("secret_key_env", "COS_SECRET_KEY")),
+            provider=str(cc.get("provider", "oss")),
+            endpoint=str(cc.get("endpoint", "https://oss-cn-guangzhou.aliyuncs.com")),
+            secret_id_env=str(cc.get("secret_id_env", "OSS_ACCESS_KEY_ID")),
+            secret_key_env=str(cc.get("secret_key_env", "OSS_ACCESS_KEY_SECRET")),
         )
 
     return TrainingConfig(

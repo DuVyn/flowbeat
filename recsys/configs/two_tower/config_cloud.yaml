@@ -9,13 +9,13 @@ seed: 20260428
 
 # ---------- I/O 路径（对象存储 URI） ----------
 paths:
-  user_features_csv: "cos://flowbeat-ml-datasets/two_tower/user_features.csv"
-  item_features_csv: "cos://flowbeat-ml-datasets/two_tower/item_features.csv"
-  train_interactions_csv: "cos://flowbeat-ml-datasets/two_tower/train_interactions.csv"
-  test_interactions_csv: "cos://flowbeat-ml-datasets/two_tower/test_interactions.csv"
-  checkpoint_dir: "cos://flowbeat-ml-artifacts/two_tower/checkpoints"
-  embedding_dir: "cos://flowbeat-ml-artifacts/two_tower/embeddings"
-  report_dir: "cos://flowbeat-ml-artifacts/two_tower/reports"
+  user_features_csv: "oss://flowbeat-ml-datasets/two_tower/user_features.csv"
+  item_features_csv: "oss://flowbeat-ml-datasets/two_tower/item_features.csv"
+  train_interactions_csv: "oss://flowbeat-ml-datasets/two_tower/train_interactions.csv"
+  test_interactions_csv: "oss://flowbeat-ml-datasets/two_tower/test_interactions.csv"
+  checkpoint_dir: "oss://flowbeat-ml-artifacts/two_tower/checkpoints"
+  embedding_dir: "oss://flowbeat-ml-artifacts/two_tower/embeddings"
+  report_dir: "oss://flowbeat-ml-artifacts/two_tower/reports"
 
 # ---------- 模型超参数 ----------
 model_params:
@@ -39,7 +39,7 @@ train_params:
 
 # ---------- 云端 SDK ----------
 cloud:
-  provider: "cos"
-  region: "ap-guangzhou"
-  secret_id_env: "COS_SECRET_ID"
-  secret_key_env: "COS_SECRET_KEY"
+  provider: "oss"
+  endpoint: "https://oss-cn-guangzhou.aliyuncs.com"
+  secret_id_env: "OSS_ACCESS_KEY_ID"
+  secret_key_env: "OSS_ACCESS_KEY_SECRET"
