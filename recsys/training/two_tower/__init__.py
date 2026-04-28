@@ -1,17 +1,34 @@
-"""Two-Tower 训练准备模块导出。"""
+"""Two-Tower 训练模块导出。"""
 
-from training.two_tower.run_context import (
-    TwoTowerRunContextSummary,
-    prepare_two_tower_run_context,
+from training.two_tower.config_schema import (
+    ModelParams,
+    TrainParams,
+    TrainingConfig,
+    parse_config,
 )
-from training.two_tower.train_local_mvp import (
-    TwoTowerTrainingSummary,
-    train_two_tower_local_mvp,
+from training.two_tower.data_engine import DataSummary, load_datasets
+from training.two_tower.model_builder import build_model, resolve_device
+from training.two_tower.storage_backend import (
+    CloudBackend,
+    LocalBackend,
+    StorageBackend,
+    create_backend,
 )
+from training.two_tower.trainer import TrainResult, train
 
 __all__ = [
-    "TwoTowerRunContextSummary",
-    "TwoTowerTrainingSummary",
-    "prepare_two_tower_run_context",
-    "train_two_tower_local_mvp",
+    "CloudBackend",
+    "DataSummary",
+    "LocalBackend",
+    "ModelParams",
+    "StorageBackend",
+    "TrainParams",
+    "TrainResult",
+    "TrainingConfig",
+    "build_model",
+    "create_backend",
+    "load_datasets",
+    "parse_config",
+    "resolve_device",
+    "train",
 ]
