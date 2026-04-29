@@ -40,6 +40,6 @@ train_params:
 # ---------- 云端 SDK ----------
 cloud:
   provider: "oss"
-  endpoint: "https://oss-cn-guangzhou.aliyuncs.com"
+  endpoint: "https://oss-cn-beijing.aliyuncs.com"
   secret_id_env: "OSS_ACCESS_KEY_ID"
   secret_key_env: "OSS_ACCESS_KEY_SECRET"
