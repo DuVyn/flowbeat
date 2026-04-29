@@ -2,7 +2,7 @@
 name = "recsys"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "pandas>=2.2.0",
     "pymysql>=1.1.2",
@@ -11,7 +11,7 @@ dependencies = [
     "redis>=6.4.0",
     "torch==2.8.0+cu128",
     "torchaudio==2.8.0+cu128",
-    "torchvision==0.22.1+cu128", # ← 改成 0.22.1
+    "torchvision==0.23.0+cu128",
 ]
 
 # 清华 PyPI 源（通用包的默认源）
