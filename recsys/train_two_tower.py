@@ -1,4 +1,4 @@
-"""双塔模型训练主入口（配置驱动，支持 Local/Cloud 环境切换）。
+"""双塔模型训练主入口（配置驱动，支持云端读数据、服务器本地落盘）。
 
 用法:
     cd recsys
@@ -21,7 +21,6 @@ from training.two_tower.data_engine import load_datasets
 from training.two_tower.model_builder import build_model, resolve_device
 from training.two_tower.storage_backend import create_backend
 from training.two_tower.trainer import train
-
 
 CURRENT_FILE = Path(__file__).resolve()
 RECSYS_ROOT = CURRENT_FILE.parent

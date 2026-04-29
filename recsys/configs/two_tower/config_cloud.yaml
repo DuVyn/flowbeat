@@ -1,5 +1,5 @@
 # ============================================================================
-# FlowBeat Two-Tower 训练配置 — 云端环境
+# FlowBeat Two-Tower 训练配置 — 云端读数据、服务器本地落盘
 # ============================================================================
 # 用法: uv run python train_two_tower.py --config configs/two_tower/config_cloud.yaml
 # ============================================================================
@@ -7,15 +7,15 @@
 environment: cloud
 seed: 20260428
 
-# ---------- I/O 路径（对象存储 URI） ----------
+# ---------- I/O 路径（输入保持对象存储，输出落到服务器本地） ----------
 paths:
   user_features_csv: "oss://flowbeat-ml-datasets-20260428/two_tower/user_features.csv"
   item_features_csv: "oss://flowbeat-ml-datasets-20260428/two_tower/item_features.csv"
   train_interactions_csv: "oss://flowbeat-ml-datasets-20260428/two_tower/train_interactions.csv"
   test_interactions_csv: "oss://flowbeat-ml-datasets-20260428/two_tower/test_interactions.csv"
-  checkpoint_dir: "oss://flowbeat-ml-artifacts-20260428/two_tower/checkpoints"
-  embedding_dir: "oss://flowbeat-ml-artifacts-20260428/two_tower/embeddings"
-  report_dir: "oss://flowbeat-ml-artifacts-20260428/two_tower/reports"
+  checkpoint_dir: "recsys/artifacts/two_tower/server_local/checkpoints"
+  embedding_dir: "recsys/artifacts/two_tower/server_local/embeddings"
+  report_dir: "recsys/artifacts/two_tower/server_local/reports"
 
 # ---------- 模型超参数 ----------
 model_params:
