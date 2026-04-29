@@ -2,14 +2,32 @@
 name = "recsys"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.13"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "pandas>=2.2.0",
     "pymysql>=1.1.2",
     "pyyaml>=6.0",
     "oss2>=2.19.1",
     "redis>=6.4.0",
-    "torch==2.8.0+cu128",
-    "torchaudio==2.8.0+cu128",
-    "torchvision==0.21.0+cu128",
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "torchvision==0.21.0",
 ]
+
+# 清华 PyPI 源：作为通用包的下载源
+[[tool.uv.index]]
+name = "tsinghua-pypi"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
+# 清华 PyTorch 源：专门下载 PyTorch 相关包
+[[tool.uv.index]]
+name = "tsinghua-pytorch"
+url = "https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch"
+explicit = true
+
+# 设定 torch 等三个包从专用的清华 PyTorch 源下载
+[tool.uv.sources]
+torch = { index = "tsinghua-pytorch" }
+torchvision = { index = "tsinghua-pytorch" }
+torchaudio = { index = "tsinghua-pytorch" }
