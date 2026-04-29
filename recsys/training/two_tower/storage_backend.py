@@ -51,6 +51,10 @@ class StorageBackend(ABC):
         """保存 JSON 文件。"""
 
     @abstractmethod
+    def copy_path(self, source_path: str, target_path: str) -> None:
+        """复制已有文件到目标路径。"""
+
+    @abstractmethod
     def exists(self, path: str) -> bool:
         """检查路径是否存在。"""
 
@@ -105,6 +109,12 @@ class LocalBackend(StorageBackend):
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    def copy_path(self, source_path: str, target_path: str) -> None:
+        source = self._resolve(source_path)
+        target = self._resolve(target_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
 
     def exists(self, path: str) -> bool:
         return self._resolve(path).exists()
@@ -256,6 +266,43 @@ class CloudBackend(StorageBackend):
             client.upload_file(str(local_path), bucket, key)
         else:
             raise ValueError(f"不支持的 provider: {self.provider}")
+
+    def copy_path(self, source_path: str, target_path: str) -> None:
+        source_is_cloud = self._is_cloud_uri(source_path)
+        target_is_cloud = self._is_cloud_uri(target_path)
+
+        if source_is_cloud and target_is_cloud:
+            source_bucket, source_key = self._parse_uri(source_path)
+            target_bucket, target_key = self._parse_uri(target_path)
+
+            if self.provider == "oss" and source_bucket == target_bucket:
+                self._get_bucket(target_bucket).copy_object(
+                    source_bucket,
+                    source_key,
+                    target_key,
+                )
+                return
+
+        if source_is_cloud:
+            source_buf = self._download_to_buffer(source_path)
+            source_tmp = self._local_cache / "copy_source_tmp.bin"
+            source_tmp.write_bytes(source_buf.getvalue())
+            if target_is_cloud:
+                self._upload_from_file(source_tmp, target_path)
+                return
+            target = Path(target_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_tmp, target)
+            return
+
+        source = Path(source_path)
+        if target_is_cloud:
+            self._upload_from_file(source, target_path)
+            return
+
+        target = Path(target_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
 
     # -- 接口实现 --
 

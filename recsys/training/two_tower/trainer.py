@@ -257,11 +257,11 @@ def train(
             f"[Epoch {epoch}/{epochs}] last checkpoint 保存完成 ({time.perf_counter() - ckpt_t0:.1f}s)"
         )
         if improved:
-            _log(f"[Epoch {epoch}/{epochs}] 开始保存 best checkpoint...")
+            _log(f"[Epoch {epoch}/{epochs}] 开始复制 best checkpoint...")
             best_t0 = time.perf_counter()
-            backend.save_checkpoint(payload, best_ckpt)
+            backend.copy_path(last_ckpt, best_ckpt)
             _log(
-                f"[Epoch {epoch}/{epochs}] best checkpoint 保存完成 ({time.perf_counter() - best_t0:.1f}s)"
+                f"[Epoch {epoch}/{epochs}] best checkpoint 复制完成 ({time.perf_counter() - best_t0:.1f}s)"
             )
 
         _log(
