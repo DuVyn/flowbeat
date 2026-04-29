@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import torch
 
@@ -25,6 +26,49 @@ from training.two_tower.config_schema import CloudConfig
 # ---------------------------------------------------------------------------
 # 抽象基类
 # ---------------------------------------------------------------------------
+
+
+def _safe_serialize(obj: Any) -> Any:
+    """将任意 payload 递归转换为 JSON 可序列化的原生 Python 类型。
+
+    - dict: 将键转换为字符串（JSON 要求键为字符串），递归处理值。
+    - numpy / torch 标量或数组: 转换为 Python 标量或 list。
+    - torch.Tensor: 若为标量返回 item()，否则返回列表。
+    - 其他不可序列化对象回退为字符串表示。
+    """
+    # 基本类型直接返回
+    if obj is None or isinstance(obj, (str, bool, int, float)):
+        return obj
+
+    # numpy 标量与数组
+    if isinstance(obj, np.generic):
+        return obj.item()
+    try:
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+    except Exception:
+        pass
+
+    # torch Tensor
+    if isinstance(obj, torch.Tensor):
+        try:
+            if obj.numel() == 1:
+                return obj.item()
+            return obj.detach().cpu().tolist()
+        except Exception:
+            return str(obj)
+
+    # 容器类型
+    if isinstance(obj, dict):
+        return {str(k): _safe_serialize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_safe_serialize(v) for v in obj]
+
+    # 回退：尽量返回可读的基本类型
+    try:
+        return str(obj)
+    except Exception:
+        return None
 
 
 class StorageBackend(ABC):
@@ -105,8 +149,9 @@ class LocalBackend(StorageBackend):
     def save_json(self, payload: Any, path: str) -> None:
         resolved = self._resolve(path)
         resolved.parent.mkdir(parents=True, exist_ok=True)
+        safe = _safe_serialize(payload)
         resolved.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
+            json.dumps(safe, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
@@ -363,7 +408,8 @@ class CloudBackend(StorageBackend):
             shutil.copy2(local_tmp, target)
 
     def save_json(self, payload: Any, path: str) -> None:
-        content = json.dumps(payload, ensure_ascii=False, indent=2)
+        safe = _safe_serialize(payload)
+        content = json.dumps(safe, ensure_ascii=False, indent=2)
         local_tmp = self._local_cache / "json_tmp.json"
         local_tmp.write_text(content, encoding="utf-8")
         if self._is_cloud_uri(path):
