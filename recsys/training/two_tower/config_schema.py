@@ -43,6 +43,7 @@ class TrainParams:
     early_stopping_patience: int = 3
     resume: bool = False
     resume_from: str = "last"
+    save_optimizer_state: bool = True
 
 
 @dataclass(slots=True)
@@ -111,6 +112,7 @@ def parse_config(raw: dict[str, Any]) -> TrainingConfig:
         early_stopping_patience=int(tp.get("early_stopping_patience", 3)),
         resume=bool(tp.get("resume", False)),
         resume_from=str(tp.get("resume_from", "last")),
+        save_optimizer_state=bool(tp.get("save_optimizer_state", True)),
     )
 
     # -- cloud（仅 cloud 环境需要） --

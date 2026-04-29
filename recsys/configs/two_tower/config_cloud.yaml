@@ -36,6 +36,7 @@ train_params:
   early_stopping_patience: 5
   resume: false
   resume_from: "last"
+  save_optimizer_state: false
 
 # ---------- 云端 SDK ----------
 cloud:

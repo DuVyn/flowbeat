@@ -74,14 +74,14 @@ def _evaluate(
     total_loss, total_n = 0.0, 0
     all_scores, all_labels = [], []
     for batch in loader:
-        u, i, l = batch[0].to(device), batch[1].to(device), batch[2].to(device)
+        u, i, labels = batch[0].to(device), batch[1].to(device), batch[2].to(device)
         logits = model(u, i)
-        loss = criterion(logits, l)
-        n = l.shape[0]
+        loss = criterion(logits, labels)
+        n = labels.shape[0]
         total_loss += loss.item() * n
         total_n += n
         all_scores.append(logits.detach())
-        all_labels.append(l.detach())
+        all_labels.append(labels.detach())
     avg_loss = total_loss / max(1, total_n)
     scores = torch.cat(all_scores) if all_scores else torch.tensor([])
     labels = torch.cat(all_labels) if all_labels else torch.tensor([])
@@ -96,6 +96,19 @@ def _resolve_ckpt_path(checkpoint_dir: str, resume_from: str) -> str:
     if rf == "best":
         return checkpoint_dir.rstrip("/") + "/best_model.pt"
     return resume_from
+
+
+def _to_cpu_state(obj: Any) -> Any:
+    """将 checkpoint 对象中的 Tensor 递归迁移到 CPU，降低序列化阶段的设备同步开销。"""
+    if isinstance(obj, torch.Tensor):
+        return obj.detach().cpu()
+    if isinstance(obj, dict):
+        return {k: _to_cpu_state(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_cpu_state(v) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_to_cpu_state(v) for v in obj)
+    return obj
 
 
 def train(
@@ -150,7 +163,11 @@ def train(
             _log(f"加载 checkpoint: {resume_path}")
             ckpt = backend.load_checkpoint(resume_path)
             model.load_state_dict(ckpt["model_state_dict"])
-            optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+            opt_state = ckpt.get("optimizer_state_dict")
+            if isinstance(opt_state, dict):
+                optimizer.load_state_dict(opt_state)
+            else:
+                _log("checkpoint 不包含 optimizer_state_dict，将仅恢复模型参数")
             start_epoch = int(ckpt.get("epoch", 0)) + 1
             best_epoch = int(ckpt.get("best_epoch", 0))
             best_loss = float(ckpt.get("best_test_loss", float("inf")))
@@ -178,15 +195,15 @@ def train(
         for step, batch in enumerate(train_loader, 1):
             u = batch[0].to(device)
             i = batch[1].to(device)
-            l = batch[2].to(device)
+            labels = batch[2].to(device)
 
             optimizer.zero_grad(set_to_none=True)
             logits = model(u, i)
-            loss = criterion(logits, l)
+            loss = criterion(logits, labels)
             loss.backward()
             optimizer.step()
 
-            bs = l.shape[0]
+            bs = labels.shape[0]
             loss_sum += loss.item() * bs
             n_sum += bs
 
@@ -198,6 +215,7 @@ def train(
                 )
 
         final_train_loss = loss_sum / max(1, n_sum)
+        _log(f"[Epoch {epoch}/{epochs}] 训练结束，开始验证集评估...")
         test_loss, test_auc = _evaluate(model, test_loader, criterion, device)
         final_test_loss = test_loss
         cost = time.perf_counter() - t0
@@ -223,18 +241,28 @@ def train(
         # 保存 checkpoint
         payload = {
             "epoch": epoch,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "user_to_idx": user_to_idx,
-            "item_to_idx": item_to_idx,
+            "model_state_dict": _to_cpu_state(model.state_dict()),
             "best_epoch": best_epoch,
             "best_test_loss": best_loss,
             "best_test_auc": best_auc,
             "history": history,
         }
+        if train_params.save_optimizer_state:
+            payload["optimizer_state_dict"] = _to_cpu_state(optimizer.state_dict())
+
+        _log(f"[Epoch {epoch}/{epochs}] 开始保存 last checkpoint...")
+        ckpt_t0 = time.perf_counter()
         backend.save_checkpoint(payload, last_ckpt)
+        _log(
+            f"[Epoch {epoch}/{epochs}] last checkpoint 保存完成 ({time.perf_counter() - ckpt_t0:.1f}s)"
+        )
         if improved:
+            _log(f"[Epoch {epoch}/{epochs}] 开始保存 best checkpoint...")
+            best_t0 = time.perf_counter()
             backend.save_checkpoint(payload, best_ckpt)
+            _log(
+                f"[Epoch {epoch}/{epochs}] best checkpoint 保存完成 ({time.perf_counter() - best_t0:.1f}s)"
+            )
 
         _log(
             f"[Epoch {epoch}/{epochs}] train_loss={final_train_loss:.6f} "

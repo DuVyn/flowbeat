@@ -12,6 +12,7 @@ import io
 import json
 import os
 import shutil
+import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
@@ -265,14 +266,38 @@ class CloudBackend(StorageBackend):
         return pd.read_csv(buf, **kwargs)
 
     def save_checkpoint(self, state_dict: dict[str, Any], path: str) -> None:
-        local_tmp = self._local_cache / "checkpoint_tmp.pt"
+        safe_name = Path(path).name or "checkpoint"
+        local_tmp = self._local_cache / f"{safe_name}.tmp.pt"
+
+        serialize_t0 = time.perf_counter()
+        print(
+            f"[CloudBackend] checkpoint 序列化开始: target={path}",
+            flush=True,
+        )
         torch.save(state_dict, local_tmp)
+        size_mb = local_tmp.stat().st_size / (1024 * 1024)
+        serialize_cost = time.perf_counter() - serialize_t0
+        print(
+            f"[CloudBackend] checkpoint 序列化完成: {size_mb:.1f}MB ({serialize_cost:.1f}s)",
+            flush=True,
+        )
+
         if self._is_cloud_uri(path):
+            upload_t0 = time.perf_counter()
+            print(
+                f"[CloudBackend] checkpoint 上传开始: target={path}",
+                flush=True,
+            )
             self._upload_from_file(local_tmp, path)
-        else:
-            target = Path(path)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(local_tmp, target)
+            print(
+                f"[CloudBackend] checkpoint 上传完成 ({time.perf_counter() - upload_t0:.1f}s): target={path}",
+                flush=True,
+            )
+            return
+
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(local_tmp, target)
 
     def load_checkpoint(self, path: str, map_location: str = "cpu") -> dict[str, Any]:
         if not self._is_cloud_uri(path):
