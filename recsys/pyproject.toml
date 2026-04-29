@@ -11,16 +11,16 @@ dependencies = [
     "redis>=6.4.0",
     "torch==2.8.0+cu128",
     "torchaudio==2.8.0+cu128",
-    "torchvision==0.21.0+cu128",
+    "torchvision==0.22.1+cu128", # ← 改成 0.22.1
 ]
 
-# 清华 PyPI 源（通用包的默认源，速度快）
+# 清华 PyPI 源（通用包的默认源）
 [[tool.uv.index]]
 name = "tsinghua-pypi"
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 default = true
 
-# PyTorch 官方 GPU 车轮索引（专门提供给 torch 等包）
+# PyTorch 官方 GPU 索引
 [[tool.uv.index]]
 name = "pytorch-gpu"
 url = "https://download.pytorch.org/whl/cu128"
