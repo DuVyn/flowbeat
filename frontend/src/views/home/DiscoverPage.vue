@@ -13,9 +13,11 @@ import { getLatestSongs } from '@/api/song'
 import defaultCover from '@/assets/images/default-cover.svg'
 import MusicList from '@/components/music/MusicList.vue'
 import { usePlayerStore } from '@/stores/player'
+import { useCoverStore } from '@/stores/cover'
 import type { GenreCatalogItem, Track } from '@/types/music'
 
 const playerStore = usePlayerStore()
+const coverStore = useCoverStore()
 
 const hotTracks = ref<Track[]>([])
 const latestTracks = ref<Track[]>([])
@@ -46,6 +48,12 @@ const topThreeTracks = computed(() => hotTracks.value.slice(0, 3))
 
 function scrollTo(sectionId: string): void {
   document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function coverUrl(track: Track): string {
+  const cached = coverStore.getCoverUrl(track.id)
+  if (cached) return cached
+  return track.coverUrl?.trim() || defaultCover
 }
 
 async function loadHotRecommendations(): Promise<void> {
@@ -236,7 +244,7 @@ onMounted(() => {
           <div class="discover-page__rank-cover-wrap">
             <img
               class="discover-page__rank-cover"
-              :src="track.coverUrl || defaultCover"
+              :src="coverUrl(track)"
               :alt="`${track.name} 封面`"
               loading="lazy"
             />

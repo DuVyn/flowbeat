@@ -35,14 +35,12 @@ const coverStore = useCoverStore()
 
 watch(
   () => props.tracks,
-  (newTracks, oldTracks) => {
-    const oldIds = new Set((oldTracks ?? []).map((track) => track.id))
-    const appendedIds = newTracks.map((track) => track.id).filter((id) => !oldIds.has(id))
-    if (appendedIds.length > 0) {
-      void coverStore.resolveCovers(appendedIds)
+  (newTracks) => {
+    if (newTracks && newTracks.length > 0) {
+      void coverStore.resolveCovers(newTracks.map((t) => t.id))
     }
   },
-  { immediate: true },
+  { immediate: true, deep: true },
 )
 
 function coverUrl(track: Track): string {

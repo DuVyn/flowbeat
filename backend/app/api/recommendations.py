@@ -46,7 +46,6 @@ async def get_personalized_recommendations(
     """获取当前登录用户个性化推荐。"""
     service = RecommendationService(db, redis_client, user_id=auth_context.user.id)
     return await service.get_personalized_recommendations(
-        user_id=auth_context.user.id,
         limit=limit,
         offset=offset,
     )
@@ -61,10 +60,8 @@ async def get_content_recommendations(
     redis_client: Redis = Depends(get_redis_client),
 ) -> PersonalizedRecommendationsResponse:
     """获取当前用户的内容冷启动推荐。"""
-
     service = RecommendationService(db, redis_client, user_id=auth_context.user.id)
     return await service.get_content_recommendations(
-        user_id=auth_context.user.id,
         limit=limit,
         offset=offset,
     )

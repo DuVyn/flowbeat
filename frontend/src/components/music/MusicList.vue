@@ -87,24 +87,19 @@ function handleViewportScroll(event: Event): void {
 
 watch(
   () => props.tracks,
-  (newTracks, oldTracks) => {
+  (newTracks) => {
     const immutableTracks = Object.freeze([...newTracks]) as readonly Track[]
     frozenTracks.value = immutableTracks
 
     if (newTracks.length > 0) {
-      // 只为本次新增分页解析封面，避免全量重复请求。
-      const oldTrackIds = new Set((oldTracks ?? []).map((track) => track.id))
-      const appendedIds = newTracks.map((track) => track.id).filter((id) => !oldTrackIds.has(id))
-      if (appendedIds.length > 0) {
-        void coverStore.resolveCovers(appendedIds)
-      }
+      void coverStore.resolveCovers(newTracks.map((track) => track.id))
     }
 
     void nextTick().then(() => {
       tryEmitLoadMore()
     })
   },
-  { immediate: true },
+  { immediate: true, deep: true },
 )
 
 watch(
