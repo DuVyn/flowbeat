@@ -14,13 +14,8 @@ dependencies = [
     "torchvision==0.23.0+cu128",
 ]
 
-# 清华 PyPI 源（通用包的默认源）
-[[tool.uv.index]]
-name = "tsinghua-pypi"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
 
-# PyTorch 官方 GPU 索引
+# PyTorch GPU 版本专用索引
 [[tool.uv.index]]
 name = "pytorch-gpu"
 url = "https://download.pytorch.org/whl/cu128"
