@@ -43,11 +43,6 @@ const myMusicItems: NavItem[] = [
     to: '/favorites',
   },
   {
-    name: '我的歌单',
-    icon: 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM21 16c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z',
-    to: '/playlists',
-  },
-  {
     name: '历史播放',
     icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
     to: '/history',

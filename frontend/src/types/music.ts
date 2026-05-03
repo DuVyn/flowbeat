@@ -274,19 +274,3 @@ export interface ClearPlayHistoryResponseDto {
   detail: string
   deleted_count: number
 }
-
-/** 歌单 / 播放列表 */
-export interface Playlist {
-  /** 歌单唯一标识 */
-  id: string
-  /** 歌单标题 */
-  title: string
-  /** 歌单描述 */
-  description: string
-  /** 歌单封面 URL */
-  coverUrl: string
-  /** 包含的曲目列表 */
-  tracks: Track[]
-  /** 歌曲总数 */
-  trackCount: number
-}
