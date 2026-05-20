@@ -36,3 +36,15 @@ export interface UpdateUserProfileRequest {
   gender?: GenderValue
   birthday?: string
 }
+
+export interface UserGenrePreferenceResponseDto {
+  genre_codes: string[]
+}
+
+export interface UserGenrePreferenceResponse {
+  genreCodes: string[]
+}
+
+export interface UpdateUserGenrePreferenceRequest {
+  genreCodes: string[]
+}

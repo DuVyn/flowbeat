@@ -23,6 +23,7 @@
 import TheSidebar from '@/components/navigation/TheSidebar.vue'
 import TheTopBar from '@/components/navigation/TheTopBar.vue'
 import ThePlayer from '@/components/player/ThePlayer.vue'
+import GenrePreferenceModal from '@/components/common/GenrePreferenceModal.vue'
 </script>
 
 <template>
@@ -47,6 +48,8 @@ import ThePlayer from '@/components/player/ThePlayer.vue'
       <ThePlayer />
     </div>
   </div>
+
+  <GenrePreferenceModal />
 </template>
 
 <style scoped>
@@ -64,8 +67,8 @@ import ThePlayer from '@/components/player/ThePlayer.vue'
   grid-template-columns: var(--sidebar-width) 1fr;
   grid-template-rows: 1fr var(--player-height);
   grid-template-areas:
-    "sidebar content"
-    "sidebar player";
+    'sidebar content'
+    'sidebar player';
   gap: var(--layout-gap);
   padding: var(--layout-gap);
   height: 100vh;
@@ -142,8 +145,8 @@ import ThePlayer from '@/components/player/ThePlayer.vue'
     grid-template-columns: 1fr;
     grid-template-rows: 1fr var(--player-height);
     grid-template-areas:
-      "content"
-      "player";
+      'content'
+      'player';
   }
 
   .main-layout__card--sidebar {

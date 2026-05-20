@@ -1,4 +1,10 @@
-import type { UpdateUserProfileRequest, UserProfile } from '@/types/auth'
+import type {
+  UpdateUserGenrePreferenceRequest,
+  UpdateUserProfileRequest,
+  UserGenrePreferenceResponse,
+  UserGenrePreferenceResponseDto,
+  UserProfile,
+} from '@/types/auth'
 import type {
   ListeningInsightsResponse,
   ListeningInsightsResponseDto,
@@ -17,6 +23,31 @@ export async function updateUserProfile(payload: UpdateUserProfileRequest): Prom
     method: 'PATCH',
     body: JSON.stringify(payload),
   })
+}
+
+export async function getUserPreferredGenres(): Promise<UserGenrePreferenceResponse> {
+  const dto = await requestJson<UserGenrePreferenceResponseDto>('/api/user/preferences/genres', {
+    method: 'GET',
+  })
+
+  return {
+    genreCodes: dto.genre_codes,
+  }
+}
+
+export async function updateUserPreferredGenres(
+  payload: UpdateUserGenrePreferenceRequest,
+): Promise<UserGenrePreferenceResponse> {
+  const dto = await requestJson<UserGenrePreferenceResponseDto>('/api/user/preferences/genres', {
+    method: 'POST',
+    body: JSON.stringify({
+      genre_codes: payload.genreCodes,
+    }),
+  })
+
+  return {
+    genreCodes: dto.genre_codes,
+  }
 }
 
 function mapGenrePreferenceItem(
