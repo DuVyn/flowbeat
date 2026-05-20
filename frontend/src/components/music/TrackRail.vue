@@ -19,11 +19,15 @@ const props = withDefaults(
     tracks: Track[]
     loading?: boolean
     emptyText?: string
+    layout?: 'scroll' | 'grid'
+    columns?: number
   }>(),
   {
     subtitle: '',
     loading: false,
     emptyText: '暂无歌曲可展示',
+    layout: 'scroll',
+    columns: 8,
   },
 )
 
@@ -66,7 +70,11 @@ function handlePlay(track: Track): void {
       <slot name="action" />
     </div>
 
-    <div v-if="loading" class="track-rail__loading">
+    <div
+      v-if="loading"
+      class="track-rail__loading"
+      :class="{ 'track-rail__loading--grid': layout === 'grid' }"
+    >
       <div v-for="i in 5" :key="i" class="track-rail__skeleton" />
     </div>
 
@@ -74,7 +82,12 @@ function handlePlay(track: Track): void {
       {{ emptyText }}
     </div>
 
-    <div v-else class="track-rail__scroller">
+    <div
+      v-else
+      class="track-rail__scroller"
+      :class="{ 'track-rail__scroller--grid': layout === 'grid' }"
+      :style="layout === 'grid' ? { '--track-rail-columns': String(columns) } : undefined"
+    >
       <button
         v-for="track in tracks"
         :key="track.id"
@@ -100,9 +113,11 @@ function handlePlay(track: Track): void {
 
 <style scoped>
 .track-rail {
+  --track-rail-columns: 8;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .track-rail__header {
@@ -113,38 +128,49 @@ function handlePlay(track: Track): void {
 }
 
 .track-rail__eyebrow {
-  margin: 0 0 0.2rem;
+  margin: 0 0 0.5rem;
   font-size: 0.76rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: rgba(15, 23, 42, 0.42);
+  color: var(--ink-300);
 }
 
 .track-rail__title {
   margin: 0;
-  color: #163025;
+  color: var(--ink-900);
   font-size: 1rem;
 }
 
 .track-rail__scroller {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(180px, 1fr);
-  gap: 0.9rem;
+  grid-auto-columns: minmax(200px, 1fr);
+  gap: 0.5rem;
   overflow-x: auto;
+  width: 100%;
+  min-width: 0;
   padding-bottom: 0.35rem;
   scroll-snap-type: x proximity;
+}
+
+.track-rail__scroller--grid {
+  grid-auto-flow: row;
+  grid-auto-columns: initial;
+  grid-template-columns: repeat(var(--track-rail-columns), minmax(0, 1fr));
+  overflow-x: hidden;
+  padding-bottom: 0;
+  scroll-snap-type: none;
 }
 
 .track-rail__card {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.8rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 14px 34px rgba(11, 30, 22, 0.06);
+  padding: 0.5rem;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-soft);
   scroll-snap-align: start;
   text-align: left;
   transition:
@@ -153,18 +179,31 @@ function handlePlay(track: Track): void {
     border-color 0.18s ease;
 }
 
+.track-rail__scroller--grid .track-rail__card {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
 .track-rail__card:hover {
   transform: translateY(-2px);
-  border-color: rgba(34, 197, 94, 0.22);
-  box-shadow: 0 18px 40px rgba(11, 30, 22, 0.12);
+  border-color: rgba(20, 91, 67, 0.3);
+  box-shadow: var(--shadow-strong);
 }
 
 .track-rail__cover {
-  width: 64px;
-  height: 64px;
-  border-radius: 14px;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
   object-fit: cover;
   flex-shrink: 0;
+}
+
+.track-rail__scroller--grid .track-rail__cover {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
 }
 
 .track-rail__meta {
@@ -174,10 +213,14 @@ function handlePlay(track: Track): void {
   gap: 0.15rem;
 }
 
+.track-rail__scroller--grid .track-rail__meta {
+  width: 100%;
+}
+
 .track-rail__name {
   margin: 0;
   font-weight: 700;
-  color: #163025;
+  color: var(--ink-900);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -185,7 +228,7 @@ function handlePlay(track: Track): void {
 
 .track-rail__artist {
   margin: 0;
-  color: rgba(15, 23, 42, 0.48);
+  color: var(--ink-500);
   font-size: 0.82rem;
   white-space: nowrap;
   overflow: hidden;
@@ -194,19 +237,45 @@ function handlePlay(track: Track): void {
 
 .track-rail__duration {
   font-size: 0.76rem;
-  color: rgba(15, 23, 42, 0.38);
+  color: var(--ink-300);
+}
+
+@media (max-width: 1280px) {
+  .track-rail__scroller--grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .track-rail__loading--grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .track-rail__scroller--grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .track-rail__loading--grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .track-rail__loading {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(180px, 1fr);
-  gap: 0.9rem;
+  grid-auto-columns: minmax(200px, 1fr);
+  gap: 0.5rem;
+}
+
+.track-rail__loading--grid {
+  grid-auto-flow: row;
+  grid-auto-columns: initial;
+  grid-template-columns: repeat(var(--track-rail-columns), minmax(0, 1fr));
 }
 
 .track-rail__skeleton {
   min-height: 96px;
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   background: linear-gradient(
     90deg,
     rgba(15, 23, 42, 0.06),
@@ -219,10 +288,10 @@ function handlePlay(track: Track): void {
 
 .track-rail__empty {
   padding: 1rem;
-  border-radius: 18px;
-  border: 1px dashed rgba(15, 23, 42, 0.12);
-  color: rgba(15, 23, 42, 0.45);
-  background: rgba(255, 255, 255, 0.62);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--surface-border);
+  color: var(--ink-500);
+  background: var(--surface-1);
 }
 
 @keyframes shimmer {

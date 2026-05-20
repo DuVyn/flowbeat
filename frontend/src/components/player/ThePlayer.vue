@@ -247,7 +247,7 @@ watch(currentTrack, (track) => {
   align-items: center;
   height: 100%;
   padding: 0 1rem;
-  gap: 1rem;
+  gap: 0.9rem;
   position: relative;
 }
 
@@ -256,15 +256,16 @@ watch(currentTrack, (track) => {
   display: flex;
   align-items: center;
   gap: 0.625rem;
-  min-width: 180px;
+  min-width: 200px;
+  max-width: 280px;
   flex-shrink: 0;
 }
 
 .player__cover {
-  width: 44px;
-  height: 44px;
-  border-radius: 6px;
-  background: rgba(76, 175, 125, 0.1);
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.06);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -289,16 +290,16 @@ watch(currentTrack, (track) => {
   min-width: 0;
 }
 .player__title {
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: #1a2e1a;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink-900);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .player__artist {
-  font-size: 0.6875rem;
-  color: rgba(0, 0, 0, 0.4);
+  font-size: 0.75rem;
+  color: var(--ink-300);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -306,7 +307,7 @@ watch(currentTrack, (track) => {
 
 .player__error {
   font-size: 0.625rem;
-  color: #b44747;
+  color: #b53f4b;
 }
 
 /* ===== 中段：按钮 + 进度条（水平一行） ===== */
@@ -314,14 +315,14 @@ watch(currentTrack, (track) => {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   min-width: 0;
 }
 
 .player__buttons {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.35rem;
   flex-shrink: 0;
 }
 
@@ -330,11 +331,11 @@ watch(currentTrack, (track) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 42px;
+  height: 42px;
   border: none;
   border-radius: 50%;
-  background: #1a2e1a;
+  background: linear-gradient(135deg, var(--accent-600), #0f3d2e);
   color: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -347,13 +348,13 @@ watch(currentTrack, (track) => {
   transform: scale(0.96);
 }
 .player__play-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .player__time {
-  font-size: 0.6875rem;
-  color: rgba(0, 0, 0, 0.35);
+  font-size: 0.75rem;
+  color: var(--ink-300);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   min-width: 2rem;
@@ -369,11 +370,11 @@ watch(currentTrack, (track) => {
 .player__right {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.4rem;
   flex-shrink: 0;
 }
 .player__vol-bar {
-  width: 90px;
+  width: 96px;
 }
 
 /* ===== 通用小图标按钮 ===== */
@@ -381,28 +382,28 @@ watch(currentTrack, (track) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: rgba(0, 0, 0, 0.4);
+  color: var(--ink-300);
   cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0;
 }
 .player__icon-btn:hover {
-  color: #1a2e1a;
+  color: var(--ink-900);
 }
 .player__icon-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 .player__icon-btn--liked {
-  color: #e85d75;
+  color: #d14b5a;
 }
 .player__icon-btn--liked:hover {
-  color: #d1465e;
+  color: #bf3b4a;
 }
 
 /* ===== 通用 range 滑条 ===== */
@@ -410,41 +411,41 @@ watch(currentTrack, (track) => {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 4px;
-  border-radius: 2px;
+  height: 6px;
+  border-radius: 999px;
   outline: none;
   cursor: pointer;
   background: linear-gradient(
     to right,
-    rgba(0, 0, 0, 0.35) 0%,
-    rgba(0, 0, 0, 0.35) var(--pct, 0%),
-    rgba(0, 0, 0, 0.08) var(--pct, 0%),
-    rgba(0, 0, 0, 0.08) 100%
+    rgba(15, 23, 42, 0.5) 0%,
+    rgba(15, 23, 42, 0.5) var(--pct, 0%),
+    rgba(15, 23, 42, 0.12) var(--pct, 0%),
+    rgba(15, 23, 42, 0.12) 100%
   );
   transition: height 0.12s ease;
 }
 .player__range:hover {
-  height: 5px;
+  height: 7px;
 }
 
 .player__range--progress {
   background: linear-gradient(
     to right,
-    #4caf7d 0%,
-    #6bcf9a var(--pct, 0%),
-    rgba(0, 0, 0, 0.08) var(--pct, 0%),
-    rgba(0, 0, 0, 0.08) 100%
+    var(--accent-600) 0%,
+    var(--accent-500) var(--pct, 0%),
+    rgba(15, 23, 42, 0.12) var(--pct, 0%),
+    rgba(15, 23, 42, 0.12) 100%
   );
 }
 
 /* 滑块（默认隐藏, hover 显示） */
 .player__range::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: #1a2e1a;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  background: var(--ink-900);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2);
   opacity: 0;
   transition: opacity 0.12s ease;
 }
@@ -453,12 +454,12 @@ watch(currentTrack, (track) => {
 }
 
 .player__range::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border: none;
   border-radius: 50%;
-  background: #1a2e1a;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  background: var(--ink-900);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.2);
   opacity: 0;
   transition: opacity 0.12s ease;
 }
@@ -471,6 +472,6 @@ watch(currentTrack, (track) => {
   right: 1rem;
   top: 0.4rem;
   font-size: 0.7rem;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--ink-300);
 }
 </style>

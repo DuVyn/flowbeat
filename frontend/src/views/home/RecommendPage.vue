@@ -47,15 +47,15 @@ let contentCache: {
 const CACHE_TTL_MS = 5 * 60 * 1000
 
 const strategyLabelMap: Record<RecommendationStrategy, string> = {
-  two_tower: '双塔候选',
-  content_cold_start: '近期偏好',
-  global_hot: '热门兜底',
+  two_tower: '为你推荐',
+  content_cold_start: '偏好扩展',
+  global_hot: '热门补位',
 }
 
 const strategyDescriptionMap: Record<RecommendationStrategy, string> = {
-  two_tower: '基于用户与歌曲向量召回的候选结果。',
-  content_cold_start: '基于近期收听与偏好特征生成的候选结果。',
-  global_hot: '当前未命中个性化缓存，已切换到热门兜底。',
+  two_tower: '根据你的听歌习惯与相似人群偏好生成。',
+  content_cold_start: '围绕近期收听与流派偏好继续扩展。',
+  global_hot: '当前个性化暂未命中，已切换热门推荐。',
 }
 
 const personalizedLabel = computed(() => {
@@ -257,10 +257,8 @@ onMounted(() => {
     <header class="recommend-page__hero">
       <div>
         <p class="recommend-page__eyebrow">个性推荐</p>
-        <h1 class="recommend-page__title">把推荐拆成可点、可听、可解释的两段</h1>
-        <p class="recommend-page__subtitle">
-          顶部卡片负责进入感，中部展示双塔候选，底部呈现近期偏好推荐。
-        </p>
+        <h1 class="recommend-page__title">为你定制的推荐</h1>
+        <p class="recommend-page__subtitle">基于你的播放历史与偏好生成，随时可刷新。</p>
       </div>
 
       <button
@@ -277,9 +275,9 @@ onMounted(() => {
         class="recommend-page__entry-card recommend-page__entry-card--primary"
         @click="scrollToSection('personalized-section')"
       >
-        <span class="recommend-page__entry-tag">猜你喜欢</span>
-        <strong>双塔候选</strong>
-        <p>进入后直接查看由用户行为向量召回的一组音乐，适合快速点播。</p>
+        <span class="recommend-page__entry-tag">推荐流</span>
+        <strong>猜你喜欢</strong>
+        <p>直接查看为你准备的候选歌曲，适合快速点播。</p>
         <span class="recommend-page__entry-foot"
           >{{ personalizedTracks.length || PAGE_SIZE }} 首候选</span
         >
@@ -289,9 +287,9 @@ onMounted(() => {
         class="recommend-page__entry-card recommend-page__entry-card--secondary"
         @click="scrollToSection('content-section')"
       >
-        <span class="recommend-page__entry-tag">流派探索</span>
-        <strong>近期偏好推荐</strong>
-        <p>基于最近收听与内容相似度生成的推荐列表，适合继续深挖同类音乐。</p>
+        <span class="recommend-page__entry-tag">偏好扩展</span>
+        <strong>继续探索</strong>
+        <p>围绕近期收听继续扩展，适合深挖同类音乐。</p>
         <span class="recommend-page__entry-foot"
           >{{ contentTracks.length || PAGE_SIZE }} 首候选</span
         >
@@ -301,8 +299,8 @@ onMounted(() => {
     <section id="personalized-section" class="recommend-page__section">
       <div class="recommend-page__section-head">
         <div>
-          <p class="recommend-page__section-eyebrow">双塔结果</p>
-          <h2 class="recommend-page__section-title">为你定制的单曲</h2>
+          <p class="recommend-page__section-eyebrow">推荐流</p>
+          <h2 class="recommend-page__section-title">猜你喜欢</h2>
           <p class="recommend-page__section-subtitle">{{ personalizedDescription }}</p>
         </div>
         <span class="recommend-page__section-chip">{{ personalizedLabel }}</span>
@@ -326,8 +324,8 @@ onMounted(() => {
     <section id="content-section" class="recommend-page__section">
       <div class="recommend-page__section-head">
         <div>
-          <p class="recommend-page__section-eyebrow">近期偏好</p>
-          <h2 class="recommend-page__section-title">基于近期喜好的推荐</h2>
+          <p class="recommend-page__section-eyebrow">偏好扩展</p>
+          <h2 class="recommend-page__section-title">继续探索</h2>
           <p class="recommend-page__section-subtitle">{{ contentDescription }}</p>
         </div>
         <span class="recommend-page__section-chip recommend-page__section-chip--soft">{{
@@ -356,9 +354,9 @@ onMounted(() => {
 .recommend-page {
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
-  padding: 0.25rem 0 0.75rem;
-  color: #163025;
+  gap: 1rem;
+  padding: 0.5rem 0 1rem;
+  color: var(--ink-900);
 }
 
 .recommend-page__hero {
@@ -366,57 +364,74 @@ onMounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-soft);
 }
 
 .recommend-page__eyebrow,
 .recommend-page__section-eyebrow {
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.5rem;
   font-size: 0.76rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.45);
+  color: var(--ink-300);
 }
 
 .recommend-page__title {
   margin: 0;
-  font-size: clamp(1.8rem, 4vw, 2.6rem);
-  letter-spacing: -0.04em;
+  font-size: clamp(1.7rem, 3.6vw, 2.4rem);
+  letter-spacing: -0.03em;
   line-height: 1.08;
 }
 
 .recommend-page__subtitle,
 .recommend-page__section-subtitle {
-  margin: 0.7rem 0 0;
-  color: rgba(15, 23, 42, 0.56);
-  font-size: 0.94rem;
+  margin: 0.5rem 0 0;
+  color: var(--ink-500);
+  font-size: 0.92rem;
   max-width: 54rem;
 }
 
 .recommend-page__refresh {
-  border: none;
+  border: 1px solid var(--surface-border);
   border-radius: 999px;
-  padding: 0.7rem 1rem;
-  background: linear-gradient(135deg, #0f6b47, #16a34a);
-  color: #fff;
-  font-weight: 700;
-  box-shadow: 0 12px 24px rgba(16, 185, 129, 0.24);
+  padding: 0.5rem 1rem;
+  background: var(--surface-1);
+  color: var(--ink-700);
+  font-weight: 600;
+  box-shadow: none;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.recommend-page__refresh:hover:not(:disabled) {
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-1px);
 }
 
 .recommend-page__entry-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: 0.5rem;
 }
 
 .recommend-page__entry-card {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.5rem;
   padding: 1rem;
-  border-radius: 22px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--surface-border);
+  border-left: 3px solid transparent;
+  background: var(--surface-0);
   text-align: left;
-  color: #163025;
+  color: var(--ink-900);
   transition:
     transform 0.18s ease,
     box-shadow 0.18s ease;
@@ -424,7 +439,7 @@ onMounted(() => {
 
 .recommend-page__entry-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 18px 34px rgba(11, 30, 22, 0.12);
+  box-shadow: var(--shadow-strong);
 }
 
 .recommend-page__entry-card strong {
@@ -433,7 +448,7 @@ onMounted(() => {
 
 .recommend-page__entry-card p {
   margin: 0;
-  color: rgba(15, 23, 42, 0.55);
+  color: var(--ink-500);
   font-size: 0.86rem;
   line-height: 1.55;
 }
@@ -447,30 +462,30 @@ onMounted(() => {
 }
 
 .recommend-page__entry-tag {
-  color: rgba(15, 23, 42, 0.42);
+  color: var(--ink-300);
 }
 
 .recommend-page__entry-foot {
-  color: rgba(15, 23, 42, 0.42);
+  color: var(--ink-300);
 }
 
 .recommend-page__entry-card--primary {
-  background: linear-gradient(180deg, rgba(236, 253, 245, 0.98), rgba(214, 248, 231, 0.92));
+  border-left-color: var(--accent-600);
 }
 
 .recommend-page__entry-card--secondary {
-  background: linear-gradient(180deg, rgba(255, 250, 235, 0.98), rgba(255, 241, 196, 0.88));
+  border-left-color: rgba(15, 23, 42, 0.3);
 }
 
 .recommend-page__section {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.5rem;
   padding: 1rem;
-  border-radius: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 16px 42px rgba(11, 30, 22, 0.06);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-soft);
 }
 
 .recommend-page__section-head {
@@ -482,27 +497,27 @@ onMounted(() => {
 
 .recommend-page__section-title {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.1rem;
 }
 
 .recommend-page__section-chip {
   padding: 0.5rem 0.8rem;
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.12);
-  color: #0f6b47;
+  background: var(--surface-1);
+  color: var(--ink-700);
 }
 
 .recommend-page__section-chip--soft {
-  background: rgba(245, 158, 11, 0.12);
-  color: #8a5a00;
+  background: var(--surface-2);
+  color: var(--ink-700);
 }
 
 .recommend-page__error {
-  padding: 0.8rem 0.95rem;
-  border-radius: 16px;
-  border: 1px solid rgba(220, 85, 85, 0.18);
-  color: #9a2d2d;
-  background: rgba(255, 235, 235, 0.72);
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(181, 63, 75, 0.2);
+  color: #9b2f3a;
+  background: rgba(255, 235, 238, 0.7);
 }
 
 @media (max-width: 900px) {

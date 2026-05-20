@@ -165,7 +165,6 @@ onMounted(() => {
   <div class="history-page">
     <header class="history-page__hero">
       <div>
-        <p class="history-page__eyebrow">最近播放</p>
         <h1 class="history-page__title">历史播放</h1>
         <p class="history-page__subtitle">按日期分组展示你听过的歌曲，清空后会重新回到空状态。</p>
       </div>
@@ -246,9 +245,9 @@ onMounted(() => {
 .history-page {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
-  padding: 0.25rem 0 0.75rem;
-  color: #163025;
+  gap: 0.95rem;
+  padding: 0.2rem 0 0.75rem;
+  color: var(--ink-900);
 }
 
 .history-page__hero {
@@ -258,13 +257,12 @@ onMounted(() => {
   gap: 1rem;
 }
 
-.history-page__eyebrow,
 .history-page__summary-eyebrow {
-  margin: 0 0 0.35rem;
-  font-size: 0.76rem;
+  margin: 0 0 0.25rem;
+  font-size: 0.72rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.45);
+  color: var(--ink-300);
 }
 
 .history-page__title {
@@ -278,10 +276,10 @@ onMounted(() => {
 .history-page__summary-subtitle,
 .history-page__summary-note,
 .history-page__summary-meta {
-  margin: 0.7rem 0 0;
-  color: rgba(15, 23, 42, 0.56);
-  font-size: 0.94rem;
-  line-height: 1.55;
+  margin: 0.45rem 0 0;
+  color: var(--ink-500);
+  font-size: 0.88rem;
+  line-height: 1.5;
 }
 
 .history-page__clear,
@@ -289,11 +287,11 @@ onMounted(() => {
 .history-page__retry {
   border: none;
   border-radius: 999px;
-  padding: 0.7rem 1rem;
-  background: linear-gradient(135deg, #0f6b47, #16a34a);
+  padding: 0.55rem 0.95rem;
+  background: var(--accent-600);
   color: #fff;
-  font-weight: 700;
-  box-shadow: 0 12px 24px rgba(16, 185, 129, 0.24);
+  font-weight: 600;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.16);
 }
 
 .history-page__clear:disabled,
@@ -305,57 +303,49 @@ onMounted(() => {
 .history-page__summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .history-page__summary-card {
-  padding: 1rem;
-  border-radius: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 16px 42px rgba(11, 30, 22, 0.06);
-}
-
-.history-page__summary-card--resume {
-  background: linear-gradient(180deg, rgba(236, 253, 245, 0.98), rgba(214, 248, 231, 0.9));
-}
-
-.history-page__summary-card--soft {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 250, 246, 0.96));
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-soft);
 }
 
 .history-page__summary-title {
   display: block;
-  font-size: 1.05rem;
+  font-size: 1rem;
 }
 
 .history-page__summary-metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-top: 0.4rem;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
 }
 
 .history-page__summary-metrics div {
-  padding: 0.85rem;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  padding: 0.65rem;
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  border: 1px solid var(--surface-border);
 }
 
 .history-page__summary-metrics strong {
   display: block;
-  font-size: 1.2rem;
-  color: #0f6b47;
+  font-size: 1.15rem;
+  color: var(--accent-600);
 }
 
 .history-page__summary-metrics span {
-  color: rgba(15, 23, 42, 0.48);
-  font-size: 0.78rem;
+  color: var(--ink-500);
+  font-size: 0.76rem;
 }
 
 .history-page__summary-button {
-  margin-top: 0.8rem;
+  margin-top: 0.55rem;
 }
 
 .history-page__error {
@@ -371,11 +361,11 @@ onMounted(() => {
 }
 
 .history-page__timeline {
-  padding: 1rem;
-  border-radius: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 16px 42px rgba(11, 30, 22, 0.06);
+  padding: 0.9rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-soft);
 }
 
 .history-page__timeline-head {

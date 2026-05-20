@@ -207,13 +207,11 @@ onMounted(() => {
     <header class="discover-page__hero">
       <div>
         <p class="discover-page__eyebrow">发现音乐</p>
-        <h1 class="discover-page__title">把热门、新歌和流派分成三层去逛</h1>
-        <p class="discover-page__subtitle">
-          先看排行榜抓住注意力，再用网格和标签快速定位你想听的东西。
-        </p>
+        <h1 class="discover-page__title">今日推荐</h1>
+        <p class="discover-page__subtitle">热门、新歌与流派入口一次看完，快速开启探索。</p>
       </div>
       <button class="discover-page__jump" @click="scrollTo('discover-genre-section')">
-        直接看流派导航
+        流派导航
       </button>
     </header>
 
@@ -222,9 +220,7 @@ onMounted(() => {
         <div>
           <p class="discover-page__module-eyebrow">排行榜</p>
           <h2 class="discover-page__module-title">今日推荐 Top 3</h2>
-          <p class="discover-page__module-subtitle">
-            用封面卡片先展示前三首，点击任一卡片即可播放。
-          </p>
+          <p class="discover-page__module-subtitle">精简卡片展示前三首，点击即可播放。</p>
         </div>
         <button class="discover-page__jump-link" @click="scrollTo('discover-hot-full')">
           查看完整榜单
@@ -272,10 +268,8 @@ onMounted(() => {
       <div class="discover-page__module-head">
         <div>
           <p class="discover-page__module-eyebrow">新歌速递</p>
-          <h2 class="discover-page__module-title">按最新入库排序的歌曲</h2>
-          <p class="discover-page__module-subtitle">
-            当前数据集时间较集中，先按入库顺序展示，后续可接入定时刷新或外部榜单。
-          </p>
+          <h2 class="discover-page__module-title">最新上架</h2>
+          <p class="discover-page__module-subtitle">最新入库的单曲，适合随手刷新。</p>
         </div>
       </div>
 
@@ -297,9 +291,7 @@ onMounted(() => {
         <div>
           <p class="discover-page__module-eyebrow">流派导航</p>
           <h2 class="discover-page__module-title">按流派继续探索</h2>
-          <p class="discover-page__module-subtitle">
-            点击标签筛选对应流派的歌曲，适合做分类探索和冷启动入口。
-          </p>
+          <p class="discover-page__module-subtitle">点击标签筛选对应流派的歌曲。</p>
         </div>
         <span
           v-if="activeGenre"
@@ -341,18 +333,17 @@ onMounted(() => {
 .discover-page {
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
-  padding: 0.25rem 0 0.75rem;
-  color: #163025;
+  gap: 1rem;
+  padding: 0.5rem 0 1rem;
+  color: var(--ink-900);
 }
 
 .discover-page__hero,
-.discover-page__module,
-.discover-page__top-three {
-  border-radius: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 16px 42px rgba(11, 30, 22, 0.06);
+.discover-page__module {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-soft);
 }
 
 .discover-page__hero {
@@ -365,11 +356,11 @@ onMounted(() => {
 
 .discover-page__eyebrow,
 .discover-page__module-eyebrow {
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.5rem;
   font-size: 0.76rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.45);
+  color: var(--ink-300);
 }
 
 .discover-page__title,
@@ -379,27 +370,38 @@ onMounted(() => {
 }
 
 .discover-page__title {
-  font-size: clamp(1.8rem, 4vw, 2.5rem);
-  letter-spacing: -0.04em;
+  font-size: clamp(1.7rem, 3.6vw, 2.3rem);
+  letter-spacing: -0.03em;
 }
 
 .discover-page__subtitle,
 .discover-page__module-subtitle {
-  margin: 0.65rem 0 0;
-  color: rgba(15, 23, 42, 0.56);
-  font-size: 0.94rem;
+  margin: 0.5rem 0 0;
+  color: var(--ink-500);
+  font-size: 0.92rem;
   max-width: 54rem;
 }
 
 .discover-page__jump,
 .discover-page__jump-link {
-  border: none;
+  border: 1px solid var(--surface-border);
   border-radius: 999px;
-  padding: 0.7rem 1rem;
-  background: linear-gradient(135deg, #0f6b47, #16a34a);
-  color: #fff;
-  font-weight: 700;
-  box-shadow: 0 12px 24px rgba(16, 185, 129, 0.24);
+  padding: 0.5rem 1rem;
+  background: var(--surface-1);
+  color: var(--ink-700);
+  font-weight: 600;
+  box-shadow: none;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.discover-page__jump:hover,
+.discover-page__jump-link:hover {
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-1px);
 }
 
 .discover-page__module {
@@ -411,25 +413,30 @@ onMounted(() => {
   justify-content: space-between;
   gap: 1rem;
   align-items: flex-end;
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.5rem;
 }
 
 .discover-page__top-three {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.9rem;
-  padding: 1rem;
-  margin-bottom: 1rem;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  margin-bottom: 0.5rem;
 }
 
 .discover-page__rank-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  padding: 0.85rem;
-  border-radius: 20px;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(243, 249, 245, 0.96));
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  grid-template-areas:
+    'cover index'
+    'cover meta';
+  gap: 0.5rem;
+  align-items: center;
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-soft);
   text-align: left;
   transition:
     transform 0.18s ease,
@@ -438,23 +445,26 @@ onMounted(() => {
 
 .discover-page__rank-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 18px 34px rgba(11, 30, 22, 0.12);
+  box-shadow: var(--shadow-strong);
 }
 
 .discover-page__rank-index {
+  grid-area: index;
   width: fit-content;
-  padding: 0.3rem 0.6rem;
+  padding: 0.25rem 0.5rem;
   border-radius: 999px;
-  background: rgba(16, 185, 129, 0.12);
-  color: #0f6b47;
+  background: var(--surface-1);
+  color: var(--ink-700);
   font-weight: 700;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
 }
 
 .discover-page__rank-cover-wrap {
+  grid-area: cover;
   overflow: hidden;
-  border-radius: 18px;
-  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  width: 120px;
+  height: 120px;
 }
 
 .discover-page__rank-cover {
@@ -465,24 +475,26 @@ onMounted(() => {
 }
 
 .discover-page__rank-meta {
+  grid-area: meta;
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
 }
 
 .discover-page__rank-meta strong {
-  font-size: 0.98rem;
+  font-size: 0.95rem;
+  color: var(--ink-900);
 }
 
 .discover-page__rank-meta span {
-  color: rgba(15, 23, 42, 0.48);
+  color: var(--ink-500);
   font-size: 0.82rem;
 }
 
 .discover-page__genre-cloud {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.7rem;
+  gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
@@ -490,21 +502,22 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.72rem 0.9rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.88);
-  color: #163025;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-0);
+  color: var(--ink-700);
 }
 
 .discover-page__genre-chip span {
-  color: rgba(15, 23, 42, 0.42);
+  color: var(--ink-300);
   font-size: 0.78rem;
 }
 
 .discover-page__genre-chip--active {
-  background: linear-gradient(135deg, #0f6b47, #16a34a);
+  background: var(--accent-600);
   color: #fff;
+  border-color: var(--accent-600);
 }
 
 .discover-page__genre-chip--active span {
@@ -513,11 +526,11 @@ onMounted(() => {
 
 .discover-page__error {
   margin-bottom: 0.9rem;
-  padding: 0.8rem 0.95rem;
-  border-radius: 16px;
-  border: 1px solid rgba(220, 85, 85, 0.18);
-  color: #9a2d2d;
-  background: rgba(255, 235, 235, 0.72);
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(181, 63, 75, 0.2);
+  color: #9b2f3a;
+  background: rgba(255, 235, 238, 0.7);
 }
 
 .discover-page__module-head :deep(.discover-page__jump-link) {
@@ -542,6 +555,15 @@ onMounted(() => {
 
   .discover-page__top-three {
     grid-template-columns: 1fr;
+  }
+
+  .discover-page__rank-card {
+    grid-template-columns: 96px 1fr;
+  }
+
+  .discover-page__rank-cover-wrap {
+    width: 96px;
+    height: 96px;
   }
 }
 </style>

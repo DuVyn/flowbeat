@@ -10,15 +10,18 @@ import { useRouter } from 'vue-router'
 
 import { getLatestPlayHistory, getPlayHistory } from '@/api/history'
 import { getListeningInsights } from '@/api/user'
+import defaultCover from '@/assets/images/default-cover.svg'
 import PreferenceRadarChart from '@/components/music/PreferenceRadarChart.vue'
 import TrackRail from '@/components/music/TrackRail.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useCoverStore } from '@/stores/cover'
 import { usePlayerStore } from '@/stores/player'
 import type { GenrePreferenceItem, PlayHistoryItem, Track } from '@/types/music'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const playerStore = usePlayerStore()
+const coverStore = useCoverStore()
 
 const insights = ref<GenrePreferenceItem[]>([])
 const totalPlays = ref(0)
@@ -64,6 +67,9 @@ async function loadHomeData(): Promise<void> {
     totalPlays.value = insightsResponse.totalPlays
     recentTracks.value = historyResponse.items
     latestTrack.value = latestResponse
+    if (latestResponse) {
+      void coverStore.resolveCovers([latestResponse.id])
+    }
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : '首页数据加载失败，请稍后重试'
   } finally {
@@ -84,6 +90,13 @@ function handlePlay(track: Track): void {
   void playerStore.playTrack(track, recentTracks.value)
 }
 
+function coverUrl(track: Track | null): string {
+  if (!track) return defaultCover
+  const cached = coverStore.getCoverUrl(track.id)
+  if (cached) return cached
+  return track.coverUrl?.trim() || defaultCover
+}
+
 onMounted(() => {
   void loadHomeData()
 })
@@ -93,14 +106,12 @@ onMounted(() => {
   <div class="home-page">
     <section class="home-page__hero">
       <div class="home-page__hero-copy">
-        <p class="home-page__eyebrow">FlowBeat 首页</p>
+        <p class="home-page__eyebrow">FlowBeat</p>
         <h1 class="home-page__greeting">
           {{ greeting }}，{{ displayName }}
           <span class="home-page__greeting-mark">🎵</span>
         </h1>
-        <p class="home-page__subtitle">
-          这里会优先展示你的听歌画像、最近播放和两个最快进入推荐的入口。
-        </p>
+        <p class="home-page__subtitle">把你的听歌画像、最近播放和推荐入口集中在同一视线里。</p>
       </div>
 
       <div class="home-page__hero-actions">
@@ -108,45 +119,57 @@ onMounted(() => {
           class="home-page__highlight-card home-page__highlight-card--primary"
           @click="openDailyExclusive"
         >
-          <span class="home-page__highlight-tag">推荐入口</span>
-          <strong>开启每日专属</strong>
-          <span>直接进入个性推荐，查看双塔候选与近期偏好。</span>
+          <strong>专属推荐流</strong>
+          <span>直达双塔候选与近期偏好。</span>
         </button>
 
         <button
           class="home-page__highlight-card home-page__highlight-card--secondary"
           @click="openTrending"
         >
-          <span class="home-page__highlight-tag">探索入口</span>
-          <strong>探索今日热门</strong>
-          <span>浏览全站热歌、流派导航和新歌速递。</span>
+          <strong>今日热榜</strong>
+          <span>浏览热门、新歌与流派入口。</span>
         </button>
       </div>
     </section>
 
     <section class="home-page__content-grid">
-      <PreferenceRadarChart
-        :items="insights"
-        title="偏好雷达"
-        :loading="loadingInsights"
-        :subtitle="insightSummary"
-      />
+      <div class="home-page__radar">
+        <PreferenceRadarChart
+          :items="insights"
+          title="偏好雷达"
+          :loading="loadingInsights"
+          :subtitle="insightSummary"
+        />
+      </div>
 
       <aside class="home-page__side-panel">
-        <div class="home-page__panel-card">
-          <p class="home-page__panel-eyebrow">继续收听</p>
-          <template v-if="latestTrack">
-            <strong class="home-page__panel-title">{{ latestTrack.name }}</strong>
-            <p class="home-page__panel-subtitle">{{ latestTrack.artist }}</p>
-            <button class="home-page__panel-button" @click="handlePlay(latestTrack)">
-              继续播放
-            </button>
-          </template>
-          <template v-else>
-            <strong class="home-page__panel-title">还没有最近播放</strong>
-            <p class="home-page__panel-subtitle">听一首歌后，这里会自动帮你接回上次进度。</p>
-          </template>
-        </div>
+        <button
+          class="home-page__resume-card"
+          type="button"
+          :class="{ 'home-page__resume-card--empty': !latestTrack }"
+          :disabled="!latestTrack"
+          @click="latestTrack && handlePlay(latestTrack)"
+        >
+          <div class="home-page__resume-cover">
+            <img :src="coverUrl(latestTrack)" :alt="latestTrack?.name || '最近播放'" />
+            <div class="home-page__resume-overlay">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </div>
+          </div>
+          <div class="home-page__resume-meta">
+            <p class="home-page__panel-eyebrow">继续播放</p>
+            <strong class="home-page__resume-title">
+              {{ latestTrack ? latestTrack.name : '还没有最近播放' }}
+            </strong>
+            <p class="home-page__resume-subtitle">
+              {{ latestTrack ? latestTrack.artist : '听一首歌后，这里会自动帮你接回上次进度。' }}
+            </p>
+            <span v-if="latestTrack" class="home-page__resume-hint">悬停封面即可播放</span>
+          </div>
+        </button>
 
         <div class="home-page__panel-card home-page__panel-card--soft">
           <p class="home-page__panel-eyebrow">画像概览</p>
@@ -172,6 +195,8 @@ onMounted(() => {
       subtitle="最近 8 首歌曲"
       :tracks="recentTracks"
       :loading="loadingRecent"
+      layout="grid"
+      :columns="8"
       empty-text="暂无最近播放记录"
       @play="handlePlay"
     />
@@ -180,49 +205,55 @@ onMounted(() => {
 
 <style scoped>
 .home-page {
+  --home-gap: 1rem;
+  --home-columns: minmax(0, 7fr) minmax(0, 5fr);
+
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 0.25rem 0 0.75rem;
-  color: #163025;
+  gap: var(--home-gap);
+  padding: 0 0 1rem;
+  color: var(--ink-900);
+  min-width: 0; /* 允许 flex 收缩，防止撑破父容器 */
+  overflow: hidden; /* 确保子内容不会溢出到视口外 */
+  width: 100%;
 }
 
 .home-page__hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.95fr);
-  gap: 1rem;
+  grid-template-columns: var(--home-columns);
+  gap: var(--home-gap);
   align-items: stretch;
 }
 
 .home-page__hero-copy,
 .home-page__hero-actions,
 .home-page__panel-card {
-  border-radius: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 18px 50px rgba(11, 30, 22, 0.08);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-soft);
 }
 
 .home-page__hero-copy {
-  padding: 1.35rem 1.4rem;
-  background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.16), transparent 40%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 252, 248, 0.98));
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem 0.9rem;
 }
 
 .home-page__eyebrow {
-  margin: 0 0 0.4rem;
+  margin: 0 0 0.5rem;
   font-size: 0.76rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.45);
+  color: var(--ink-300);
 }
 
 .home-page__greeting {
   margin: 0;
-  font-size: clamp(2rem, 4vw, 3.35rem);
-  line-height: 1.03;
-  letter-spacing: -0.04em;
+  font-size: clamp(1.9rem, 3.6vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
 }
 
 .home-page__greeting-mark {
@@ -230,28 +261,32 @@ onMounted(() => {
 }
 
 .home-page__subtitle {
-  margin: 0.85rem 0 0;
-  max-width: 48rem;
-  color: rgba(15, 23, 42, 0.56);
-  font-size: 0.96rem;
+  margin: 0.5rem 0 0;
+  max-width: 100%;
+  color: var(--ink-500);
+  font-size: 0.95rem;
 }
 
 .home-page__hero-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  padding: 1rem;
+  grid-template-columns: 1fr;
+  gap: var(--home-gap);
+  padding: 0;
+  align-items: stretch;
 }
 
 .home-page__highlight-card {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 1rem;
-  border-radius: 20px;
-  color: #163025;
+  gap: 0.35rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--radius-lg);
+  color: var(--ink-900);
   text-align: left;
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--surface-border);
+  border-left: 3px solid transparent;
+  background: var(--surface-0);
+  height: 100%;
   transition:
     transform 0.18s ease,
     box-shadow 0.18s ease;
@@ -259,7 +294,7 @@ onMounted(() => {
 
 .home-page__highlight-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 18px 30px rgba(11, 30, 22, 0.12);
+  box-shadow: var(--shadow-strong);
 }
 
 .home-page__highlight-card strong {
@@ -267,9 +302,13 @@ onMounted(() => {
 }
 
 .home-page__highlight-card span:last-child {
-  color: rgba(15, 23, 42, 0.54);
+  color: var(--ink-500);
   font-size: 0.84rem;
   line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
 }
 
 .home-page__highlight-tag,
@@ -280,41 +319,45 @@ onMounted(() => {
 }
 
 .home-page__highlight-tag {
-  color: rgba(15, 23, 42, 0.44);
+  color: var(--ink-300);
 }
 
 .home-page__highlight-card--primary {
-  background: linear-gradient(180deg, rgba(236, 253, 245, 0.98), rgba(214, 248, 231, 0.9));
+  border-left-color: var(--accent-600);
 }
 
 .home-page__highlight-card--secondary {
-  background: linear-gradient(180deg, rgba(255, 250, 235, 0.98), rgba(255, 241, 196, 0.86));
+  border-left-color: rgba(15, 23, 42, 0.24);
 }
 
 .home-page__content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
-  gap: 1rem;
+  grid-template-columns: var(--home-columns);
+  gap: var(--home-gap);
   align-items: start;
+}
+
+.home-page__radar {
+  width: 100%;
 }
 
 .home-page__side-panel {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .home-page__panel-card {
-  padding: 1rem;
+  padding: 0.85rem 0.95rem;
 }
 
 .home-page__panel-card--soft {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 250, 246, 0.96));
+  background: var(--surface-0);
 }
 
 .home-page__panel-eyebrow {
-  margin: 0 0 0.35rem;
-  color: rgba(15, 23, 42, 0.42);
+  margin: 0 0 0.5rem;
+  color: var(--ink-300);
 }
 
 .home-page__panel-title {
@@ -325,45 +368,138 @@ onMounted(() => {
 .home-page__panel-subtitle,
 .home-page__panel-note {
   margin: 0.35rem 0 0;
-  color: rgba(15, 23, 42, 0.55);
+  color: var(--ink-500);
   font-size: 0.85rem;
   line-height: 1.55;
-}
-
-.home-page__panel-button {
-  margin-top: 0.85rem;
-  padding: 0.7rem 1rem;
-  border-radius: 999px;
-  border: none;
-  background: linear-gradient(135deg, #0f6b47, #16a34a);
-  color: #fff;
-  font-weight: 700;
-  box-shadow: 0 12px 24px rgba(16, 185, 129, 0.24);
 }
 
 .home-page__metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin: 0.4rem 0 0.75rem;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0.5rem;
 }
 
 .home-page__metrics div {
-  padding: 0.85rem;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  padding: 0.75rem;
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  border: 1px solid var(--surface-border);
 }
 
 .home-page__metrics strong {
   display: block;
   font-size: 1.35rem;
-  color: #0f6b47;
+  color: var(--accent-600);
 }
 
 .home-page__metrics span {
-  color: rgba(15, 23, 42, 0.48);
+  color: var(--ink-500);
   font-size: 0.78rem;
+}
+
+.home-page__resume-card {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-0);
+  text-align: left;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.home-page__resume-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-strong);
+}
+
+.home-page__resume-card:disabled {
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+.home-page__resume-cover {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface-1);
+}
+
+.home-page__resume-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: filter 0.2s ease;
+}
+
+.home-page__resume-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 15, 20, 0.45);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  color: #ffffff;
+}
+
+.home-page__resume-overlay svg {
+  width: 28px;
+  height: 28px;
+}
+
+.home-page__resume-card:hover .home-page__resume-overlay {
+  opacity: 1;
+}
+
+.home-page__resume-card:hover .home-page__resume-cover img {
+  filter: brightness(0.85);
+}
+
+.home-page__resume-card--empty .home-page__resume-overlay {
+  display: none;
+}
+
+.home-page__resume-card--empty .home-page__resume-cover img {
+  filter: grayscale(0.2) brightness(0.95);
+}
+
+.home-page__resume-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.home-page__resume-title {
+  font-size: 1.05rem;
+  color: var(--ink-900);
+}
+
+.home-page__resume-subtitle {
+  margin: 0;
+  color: var(--ink-500);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-page__resume-hint {
+  font-size: 0.72rem;
+  color: var(--ink-300);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 @media (max-width: 1080px) {
@@ -371,12 +507,25 @@ onMounted(() => {
   .home-page__content-grid {
     grid-template-columns: 1fr;
   }
+
+  .home-page__hero-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
   .home-page__hero-actions,
   .home-page__metrics {
     grid-template-columns: 1fr;
+  }
+
+  .home-page__resume-card {
+    grid-template-columns: 72px 1fr;
+  }
+
+  .home-page__resume-cover {
+    width: 72px;
+    height: 72px;
   }
 }
 </style>

@@ -13,7 +13,7 @@ import { getFavoriteSongs, toggleFavorite } from '@/api/favorites'
 import MusicList from '@/components/music/MusicList.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePlayerStore } from '@/stores/player'
-import type { FavoriteTrackItem } from '@/types/music'
+import type { FavoriteTrackItem, Track } from '@/types/music'
 
 const PAGE_SIZE = 20
 
@@ -66,11 +66,11 @@ async function loadFavorites(reset = false): Promise<void> {
   }
 }
 
-function handlePlay(track: FavoriteTrackItem): void {
+function handlePlay(track: Track): void {
   void playerStore.playTrack(track, tracks.value)
 }
 
-async function handleToggleFavorite(track: FavoriteTrackItem): Promise<void> {
+async function handleToggleFavorite(track: Track): Promise<void> {
   if (toggleBusyIds.value.has(track.id)) {
     return
   }
@@ -113,7 +113,6 @@ onMounted(() => {
   <div class="favorites-page">
     <header class="favorites-page__hero">
       <div>
-        <p class="favorites-page__eyebrow">我的音乐</p>
         <h1 class="favorites-page__title">我喜欢</h1>
         <p class="favorites-page__subtitle">
           把收藏过的歌曲集中在一起，支持继续播放，也能直接取消收藏。
@@ -173,9 +172,9 @@ onMounted(() => {
 .favorites-page {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 0.25rem 0 0.75rem;
-  color: #163025;
+  gap: 0.95rem;
+  padding: 0.2rem 0 0.75rem;
+  color: var(--ink-900);
 }
 
 .favorites-page__hero {
@@ -183,14 +182,6 @@ onMounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-}
-
-.favorites-page__eyebrow {
-  margin: 0 0 0.35rem;
-  font-size: 0.76rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.45);
 }
 
 .favorites-page__title {
@@ -201,51 +192,53 @@ onMounted(() => {
 }
 
 .favorites-page__subtitle {
-  margin: 0.7rem 0 0;
-  color: rgba(15, 23, 42, 0.56);
-  font-size: 0.94rem;
+  margin: 0.45rem 0 0;
+  color: var(--ink-500);
+  font-size: 0.88rem;
+  line-height: 1.5;
   max-width: 54rem;
 }
 
 .favorites-page__refresh {
   border: none;
   border-radius: 999px;
-  padding: 0.7rem 1rem;
-  background: linear-gradient(135deg, #b91c1c, #ef4444);
+  padding: 0.55rem 0.95rem;
+  background: var(--accent-600);
   color: #fff;
-  font-weight: 700;
-  box-shadow: 0 12px 24px rgba(239, 68, 68, 0.22);
+  font-weight: 600;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.16);
 }
 
 .favorites-page__stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .favorites-page__stat-card {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 1rem 1.1rem;
-  border-radius: 20px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 12px 32px rgba(11, 30, 22, 0.06);
+  gap: 0.25rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-soft);
 }
 
 .favorites-page__stat-card--soft {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(244, 114, 182, 0.08));
+  background: var(--surface-0);
 }
 
 .favorites-page__stat-card span {
-  font-size: 0.8rem;
-  color: rgba(15, 23, 42, 0.48);
+  font-size: 0.76rem;
+  color: var(--ink-500);
 }
 
 .favorites-page__stat-card strong {
-  font-size: 1.4rem;
-  letter-spacing: -0.03em;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+  color: var(--accent-600);
 }
 
 .favorites-page__error {
@@ -271,9 +264,9 @@ onMounted(() => {
   margin: 0;
   padding: 1rem 1.1rem;
   border-radius: 18px;
-  border: 1px dashed rgba(15, 23, 42, 0.14);
-  color: rgba(15, 23, 42, 0.56);
-  background: rgba(255, 255, 255, 0.72);
+  border: 1px dashed var(--surface-border);
+  color: var(--ink-500);
+  background: var(--surface-0);
 }
 
 @media (max-width: 720px) {

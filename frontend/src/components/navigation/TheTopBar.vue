@@ -184,7 +184,7 @@ async function handleLogout() {
   padding: 0.875rem 1.5rem;
 
   /* 半透明白色背景 + 底部渐隐，与内容区融为一体 */
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95) 60%, transparent);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.96) 60%, rgba(255, 255, 255, 0.4));
 
   /* 顶栏顶部两侧圆角，和其他卡片保持一致 */
   border-top-left-radius: var(--card-radius);
@@ -207,7 +207,7 @@ async function handleLogout() {
   left: 11px;
   width: 15px;
   height: 15px;
-  color: rgba(0, 0, 0, 0.3);
+  color: var(--ink-300);
   pointer-events: none;
   transition: color 0.2s ease;
 }
@@ -215,28 +215,28 @@ async function handleLogout() {
 .topbar__search-input {
   width: 100%;
   padding: 0.45rem 0.75rem 0.45rem 2rem;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 18px;
-  background: rgba(0, 0, 0, 0.03);
-  color: #1a2e1a;
-  font-size: 0.8125rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink-900);
+  font-size: 0.85rem;
   font-family: inherit;
   outline: none;
   transition: all 0.25s ease;
 }
 
 .topbar__search-input::placeholder {
-  color: rgba(0, 0, 0, 0.3);
+  color: var(--ink-300);
 }
 
 .topbar__search-input:focus {
   background: #ffffff;
-  border-color: rgba(76, 175, 125, 0.5);
-  box-shadow: 0 0 0 3px rgba(76, 175, 125, 0.1);
+  border-color: rgba(20, 91, 67, 0.5);
+  box-shadow: 0 0 0 3px rgba(20, 91, 67, 0.12);
 }
 
 .topbar__search:focus-within .topbar__search-icon {
-  color: rgba(76, 175, 125, 0.8);
+  color: var(--accent-600);
 }
 
 /* ========================================
@@ -256,14 +256,14 @@ async function handleLogout() {
   height: 32px;
   border: none;
   border-radius: 50%;
-  background: linear-gradient(135deg, #4caf7d, #3d9e6e);
+  background: linear-gradient(135deg, var(--accent-600), #0f3d2e);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .topbar__avatar:hover {
   transform: scale(1.05);
-  box-shadow: 0 0 14px rgba(76, 175, 125, 0.3);
+  box-shadow: 0 0 14px rgba(20, 91, 67, 0.25);
 }
 
 .topbar__avatar-text {
@@ -283,10 +283,10 @@ async function handleLogout() {
   padding: 6px;
   border-radius: 12px;
   background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--surface-border);
   box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.1),
-    0 1px 4px rgba(0, 0, 0, 0.06);
+    0 4px 24px rgba(15, 23, 42, 0.12),
+    0 1px 4px rgba(15, 23, 42, 0.08);
   z-index: 100;
 }
 
@@ -299,9 +299,9 @@ async function handleLogout() {
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: rgba(0, 0, 0, 0.7);
-  font-size: 0.8125rem;
-  font-weight: 450;
+  color: var(--ink-700);
+  font-size: 0.82rem;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -309,8 +309,8 @@ async function handleLogout() {
 }
 
 .topbar__dropdown-item:hover {
-  background: rgba(76, 175, 125, 0.08);
-  color: #1a2e1a;
+  background: var(--surface-1);
+  color: var(--ink-900);
 }
 
 .topbar__dropdown-item svg {
@@ -328,7 +328,7 @@ async function handleLogout() {
 .topbar__dropdown-divider {
   height: 1px;
   margin: 4px 8px;
-  background: rgba(0, 0, 0, 0.07);
+  background: var(--surface-border);
 }
 
 /* ========================================

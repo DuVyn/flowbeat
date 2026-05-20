@@ -57,11 +57,13 @@ import GenrePreferenceModal from '@/components/common/GenrePreferenceModal.vue'
  * 布局根容器 — 浅色背景
  * ======================================== */
 .main-layout {
-  --sidebar-width: 240px;
-  --player-height: 72px;
+  --sidebar-width: 232px;
+  --player-height: 80px;
   --layout-gap: 8px;
-  --card-radius: 10px;
-  --card-bg: #ffffff;
+  --card-radius: var(--radius-xl);
+  --card-bg: var(--surface-0);
+  --card-border: var(--surface-border);
+  --card-shadow: var(--shadow-soft);
 
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr;
@@ -72,8 +74,10 @@ import GenrePreferenceModal from '@/components/common/GenrePreferenceModal.vue'
   gap: var(--layout-gap);
   padding: var(--layout-gap);
   height: 100vh;
-  background-color: #e8f0e8;
-  color: #1a2e1a;
+  background:
+    radial-gradient(circle at top left, rgba(31, 122, 93, 0.06), transparent 45%),
+    linear-gradient(180deg, var(--surface-1) 0%, var(--surface-2) 100%);
+  color: var(--ink-900);
   overflow: hidden;
 }
 
@@ -83,8 +87,10 @@ import GenrePreferenceModal from '@/components/common/GenrePreferenceModal.vue'
 .main-layout__card {
   border-radius: var(--card-radius);
   background: var(--card-bg);
+  border: 1px solid var(--card-border);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--card-shadow);
+  min-width: 0;
 }
 
 /* ---- 侧边栏卡片（跨两行） ---- */
@@ -119,7 +125,10 @@ import GenrePreferenceModal from '@/components/common/GenrePreferenceModal.vue'
 .main-layout__scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem;
+  overflow-x: hidden;
+  padding: 1.25rem 1.5rem 1.5rem;
+  min-width: 0;
+  scrollbar-color: rgba(15, 23, 42, 0.28) transparent;
 
   /* 自定义滚动条 */
   &::-webkit-scrollbar {
@@ -129,11 +138,11 @@ import GenrePreferenceModal from '@/components/common/GenrePreferenceModal.vue'
     background: transparent;
   }
   &::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1);
+    background: rgba(15, 23, 42, 0.18);
     border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.18);
+    background: rgba(15, 23, 42, 0.28);
   }
 }
 

@@ -131,8 +131,8 @@ const myMusicItems: NavItem[] = [
   flex-direction: column;
   height: 100%;
   padding: 0 0.75rem;
-  background-color: #ffffff;
-  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  background-color: var(--surface-0);
+  border-right: 1px solid var(--surface-border);
   overflow-y: auto;
 
   /* 隐藏滚动条 */
@@ -160,7 +160,7 @@ const myMusicItems: NavItem[] = [
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #4caf7d 0%, #3d9e6e 100%);
+  background: linear-gradient(135deg, var(--accent-600) 0%, #0f3d2e 100%);
   color: #ffffff;
   flex-shrink: 0;
 }
@@ -174,7 +174,8 @@ const myMusicItems: NavItem[] = [
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #1a2e1a 30%, #4caf7d);
+  color: var(--ink-900);
+  background: linear-gradient(135deg, var(--ink-900) 35%, var(--accent-500));
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -192,7 +193,7 @@ const myMusicItems: NavItem[] = [
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(0, 0, 0, 0.35);
+  color: var(--ink-300);
   padding: 0.5rem 0.75rem 0.375rem;
   margin: 0;
 }
@@ -216,25 +217,25 @@ const myMusicItems: NavItem[] = [
   padding: 0.6rem 0.75rem;
   border-radius: 10px;
   font-size: 0.875rem;
-  font-weight: 450;
-  color: rgba(0, 0, 0, 0.5);
+  font-weight: 500;
+  color: var(--ink-500);
   text-decoration: none;
   transition: all 0.2s ease;
 }
 
 .sidebar__nav-link:hover {
-  color: rgba(0, 0, 0, 0.8);
-  background: rgba(76, 175, 125, 0.08);
+  color: var(--ink-900);
+  background: var(--surface-1);
 }
 
 /* 激活状态 */
 .sidebar__nav-link--active {
-  color: #1a2e1a;
-  background: rgba(76, 175, 125, 0.12);
+  color: var(--ink-900);
+  background: var(--surface-2);
 }
 
 .sidebar__nav-link--active .sidebar__nav-icon {
-  color: #4caf7d;
+  color: var(--accent-600);
 }
 
 .sidebar__nav-icon {
@@ -250,6 +251,6 @@ const myMusicItems: NavItem[] = [
 .sidebar__divider {
   height: 1px;
   margin: 0.75rem 1rem;
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--surface-border);
 }
 </style>

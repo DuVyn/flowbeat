@@ -123,11 +123,11 @@ function handleToggleLike(event: MouseEvent) {
  * ======================================== */
 .music-list-item {
   display: grid;
-  grid-template-columns: 2rem 1fr 4rem;
+  grid-template-columns: 2rem 1fr 4.5rem;
   align-items: center;
   gap: 1rem;
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
+  padding: 0.25rem 1rem;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
     background-color 0.2s ease,
@@ -136,11 +136,11 @@ function handleToggleLike(event: MouseEvent) {
 }
 
 .music-list-item--with-action {
-  grid-template-columns: 2rem 1fr 4rem auto;
+  grid-template-columns: 2rem 1fr 4.5rem auto;
 }
 
 .music-list-item:hover {
-  background-color: rgba(76, 175, 80, 0.06);
+  background-color: rgba(15, 23, 42, 0.04);
 }
 
 .music-list-item:active {
@@ -151,7 +151,7 @@ function handleToggleLike(event: MouseEvent) {
 .music-list-item__index {
   font-size: 0.85rem;
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.36);
+  color: var(--ink-300);
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
@@ -160,17 +160,17 @@ function handleToggleLike(event: MouseEvent) {
 .music-list-item__info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.6rem;
   min-width: 0;
 }
 
 /* ---- 封面包装（含播放覆盖） ---- */
 .music-list-item__cover-wrapper {
   position: relative;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   flex-shrink: 0;
-  border-radius: 6px;
+  border-radius: 10px;
   overflow: hidden;
 }
 
@@ -219,7 +219,7 @@ function handleToggleLike(event: MouseEvent) {
 .music-list-item__name {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #1a2e1a;
+  color: var(--ink-900);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -227,7 +227,7 @@ function handleToggleLike(event: MouseEvent) {
 
 .music-list-item__artist {
   font-size: 0.78rem;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--ink-300);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -236,7 +236,7 @@ function handleToggleLike(event: MouseEvent) {
 /* ---- 时长 ---- */
 .music-list-item__duration {
   font-size: 0.85rem;
-  color: rgba(0, 0, 0, 0.42);
+  color: var(--ink-300);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -244,7 +244,7 @@ function handleToggleLike(event: MouseEvent) {
 .music-list-item__favorite-btn {
   border: none;
   background: transparent;
-  color: rgba(239, 68, 68, 0.45);
+  color: rgba(225, 85, 97, 0.5);
   width: 2rem;
   height: 2rem;
   border-radius: 999px;
@@ -263,12 +263,12 @@ function handleToggleLike(event: MouseEvent) {
 }
 
 .music-list-item__favorite-btn:hover {
-  background: rgba(239, 68, 68, 0.08);
-  color: rgba(239, 68, 68, 0.85);
+  background: rgba(225, 85, 97, 0.08);
+  color: rgba(225, 85, 97, 0.9);
 }
 
 .music-list-item__favorite-btn--liked {
-  color: #ef4444;
+  color: #e15561;
 }
 
 .music-list-item__favorite-btn:active {
@@ -282,7 +282,7 @@ function handleToggleLike(event: MouseEvent) {
   .music-list-item {
     grid-template-columns: 1.5rem 1fr 3.5rem;
     gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
+    padding: 0.25rem 0.75rem;
   }
 
   .music-list-item--with-action {

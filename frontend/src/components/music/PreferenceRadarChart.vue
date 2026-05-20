@@ -23,9 +23,9 @@ const props = withDefaults(
   },
 )
 
-const size = 340
+const size = 280
 const center = size / 2
-const radius = 118
+const radius = 92
 const levels = 5
 
 const points = computed(() => {
@@ -37,8 +37,8 @@ const points = computed(() => {
     return {
       x: center + Math.cos(angle) * r,
       y: center + Math.sin(angle) * r,
-      labelX: center + Math.cos(angle) * (radius + 28),
-      labelY: center + Math.sin(angle) * (radius + 28),
+      labelX: center + Math.cos(angle) * (radius + 22),
+      labelY: center + Math.sin(angle) * (radius + 22),
       angle,
       value,
       item,
@@ -75,11 +75,13 @@ const concentricLevels = computed(() =>
 <template>
   <section class="preference-radar">
     <header class="preference-radar__header">
-      <div>
+      <div style="width: 100%">
         <p class="preference-radar__eyebrow">{{ title }}</p>
-        <h2 class="preference-radar__title">理解你的听歌轮廓</h2>
+        <div class="preference-radar__title-row">
+          <h2 class="preference-radar__title">理解你的听歌轮廓</h2>
+          <p class="preference-radar__subtitle">{{ subtitle }}</p>
+        </div>
       </div>
-      <p class="preference-radar__subtitle">{{ subtitle }}</p>
     </header>
 
     <div v-if="loading" class="preference-radar__empty">正在生成偏好画像...</div>
@@ -148,13 +150,11 @@ const concentricLevels = computed(() =>
 
 <style scoped>
 .preference-radar {
-  padding: 1.25rem;
-  border-radius: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.16), transparent 42%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 251, 248, 0.96));
-  box-shadow: 0 24px 70px rgba(11, 30, 22, 0.08);
+  padding: 1rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-soft);
 }
 
 .preference-radar__header {
@@ -167,30 +167,40 @@ const concentricLevels = computed(() =>
 
 .preference-radar__eyebrow {
   margin: 0 0 0.35rem;
-  font-size: 0.76rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.45);
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: var(--ink-900);
 }
 
 .preference-radar__title {
   margin: 0;
-  font-size: 1.15rem;
-  letter-spacing: -0.02em;
-  color: #163025;
+  font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--ink-500);
 }
 
 .preference-radar__subtitle {
   margin: 0;
-  color: rgba(15, 23, 42, 0.48);
-  font-size: 0.86rem;
-  max-width: 220px;
+  color: var(--ink-500);
+  font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1.55;
+  max-width: none;
   text-align: right;
+}
+
+.preference-radar__title-row {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
 }
 
 .preference-radar__body {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.8fr);
   gap: 1rem;
   align-items: center;
 }
@@ -202,48 +212,48 @@ const concentricLevels = computed(() =>
 }
 
 .preference-radar__grid {
-  fill: rgba(34, 197, 94, 0.04);
-  stroke: rgba(15, 23, 42, 0.08);
+  fill: rgba(15, 23, 42, 0.03);
+  stroke: rgba(15, 23, 42, 0.12);
   stroke-width: 1;
 }
 
 .preference-radar__axis {
-  stroke: rgba(15, 23, 42, 0.14);
+  stroke: rgba(15, 23, 42, 0.16);
   stroke-width: 1;
 }
 
 .preference-radar__shape {
-  fill: rgba(34, 197, 94, 0.28);
-  stroke: rgba(22, 163, 74, 0.92);
+  fill: rgba(20, 91, 67, 0.18);
+  stroke: var(--accent-600);
   stroke-width: 2;
-  filter: drop-shadow(0 10px 18px rgba(16, 185, 129, 0.22));
+  filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.18));
 }
 
 .preference-radar__dot {
   fill: #ffffff;
-  stroke: #16a34a;
+  stroke: var(--accent-600);
   stroke-width: 2;
 }
 
 .preference-radar__center {
-  fill: #16a34a;
+  fill: var(--accent-600);
 }
 
 .preference-radar__label {
   font-size: 11px;
   font-weight: 600;
-  fill: #163025;
+  fill: var(--ink-700);
 }
 
 .preference-radar__label--1,
 .preference-radar__label--3 {
-  fill: #0f766e;
+  fill: var(--accent-600);
 }
 
 .preference-radar__legend {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .preference-radar__legend-item {
@@ -251,38 +261,38 @@ const concentricLevels = computed(() =>
   justify-content: space-between;
   gap: 1rem;
   align-items: center;
-  padding: 0.7rem 0.85rem;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(15, 23, 42, 0.07);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  border: 1px solid var(--surface-border);
 }
 
 .preference-radar__legend-name {
   margin: 0 0 0.1rem;
   font-weight: 600;
-  color: #163025;
+  color: var(--ink-900);
 }
 
 .preference-radar__legend-meta {
   margin: 0;
-  color: rgba(15, 23, 42, 0.48);
+  color: var(--ink-500);
   font-size: 0.8rem;
 }
 
 .preference-radar__legend-weight {
   font-size: 1.1rem;
-  color: #0f6b47;
+  color: var(--accent-600);
 }
 
 .preference-radar__empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 280px;
-  color: rgba(15, 23, 42, 0.45);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.65);
-  border: 1px dashed rgba(15, 23, 42, 0.12);
+  min-height: 240px;
+  color: var(--ink-500);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  border: 1px dashed var(--surface-border);
 }
 
 @media (max-width: 960px) {
@@ -295,6 +305,14 @@ const concentricLevels = computed(() =>
   .preference-radar__subtitle {
     text-align: left;
     max-width: none;
+    white-space: normal;
+  }
+
+  .preference-radar__title-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    align-items: flex-start;
   }
 }
 </style>
