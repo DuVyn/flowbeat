@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- 品牌背景渐变: 高级质感的深邃晶透翠绿 (Radial Glow) -->
+    <radialGradient id="bgGrad" cx="25%" cy="20%" r="90%" fx="20%" fy="15%">
+      <stop offset="0%" stop-color="#269773" />
+      <stop offset="35%" stop-color="#145b43" />
+      <stop offset="70%" stop-color="#0a291f" />
+      <stop offset="100%" stop-color="#04120e" />
+    </radialGradient>
+
+    <!-- 边缘高光: 用于模拟玻璃/金属质感边缘自然反光 -->
+    <linearGradient id="edgeHighlight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.02"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.15"/>
+    </linearGradient>
+
+    <!-- 图标元素垂直渐变: 顶部白亮，底部带点翠绿莹润，更立体 -->
+    <linearGradient id="barGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#D1FAE5" stop-opacity="0.5"/>
+    </linearGradient>
+
+    <!-- 增强的全局弥散阴影，提供更强的全息悬浮感 -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- Logo 底框外轮廓 (高级暗色微光底板) -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <!-- 内部微晶光泽描边，营造拟物/微晶玻璃高级感 -->
+  <rect x="3" y="3" width="506" height="506" rx="109" fill="none" stroke="url(#edgeHighlight)" stroke-width="3" />
+
+  <!-- 视觉核心1: Flow (流) - 完美对称的柔和正弦流线 -->
+  <!-- 通过几何学精心计算的贝塞尔曲线，贯穿中心，象征音乐数据的涌流和推荐算法的精准平滑 -->
+  <path d="M 64 256 C 128 128, 192 128, 256 256 S 384 384, 448 256"
+        fill="none" stroke="#FFFFFF" stroke-opacity="0.4" stroke-width="28" stroke-linecap="round" filter="url(#shadow)" />
+
+  <!-- 视觉核心2: Beat (拍) - 五组呈现波形对称的音频频谱柱 -->
+  <!-- 完美居中放置，由中间向两侧递减，形成声波脉动 (Beat) 的力量感 -->
+  <g fill="url(#barGrad)" filter="url(#shadow)">
+    <!-- 频谱柱 1 -->
+    <rect x="136" y="208" width="32" height="96" rx="16" />
+    <!-- 频谱柱 2 -->
+    <rect x="188" y="156" width="32" height="200" rx="16" />
+    <!-- 频谱柱 3 (主C位最高点) -->
+    <rect x="240" y="112" width="32" height="288" rx="16" />
+    <!-- 频谱柱 4 -->
+    <rect x="292" y="156" width="32" height="200" rx="16" />
+    <!-- 频谱柱 5 -->
+    <rect x="344" y="208" width="32" height="96" rx="16" />
+  </g>
+</svg>
