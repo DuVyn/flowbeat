@@ -13,6 +13,20 @@ services:
       TZ: Asia/Shanghai
     volumes:
       - mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "127.0.0.1",
+          "-uroot",
+          "-p${MYSQL_ROOT_PASSWORD}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     networks:
       - flowbeat-network
 
@@ -30,6 +44,11 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     networks:
       - flowbeat-network
 
@@ -44,6 +63,80 @@ services:
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - flowbeat-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: flowbeat-backend:latest
+    container_name: flowbeat-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/app:/app/app
+    environment:
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+      MINIO_ENDPOINT: minio:9000
+      CORS_ALLOW_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - flowbeat-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: flowbeat-frontend:latest
+    container_name: flowbeat-frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - flowbeat-network
+
+  recsys:
+    build:
+      context: ./recsys
+      dockerfile: Dockerfile
+    image: flowbeat-recsys:latest
+    container_name: flowbeat-recsys
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+      FLOWBEAT_WORKSPACE_ROOT: /workspace
+      RECSYS_COMMAND: sleep infinity
+    working_dir: /workspace/recsys
+    volumes:
+      - ./recsys:/workspace/recsys
+      - ./data:/workspace/data
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - flowbeat-network
 

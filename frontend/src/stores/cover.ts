@@ -18,6 +18,23 @@ const MAX_CACHE_SIZE = 500
 let pendingResolve: Promise<void> | null = null
 let pendingIds: number[] = []
 
+function normalizeCoverUrl(songId: number, url: string): string {
+  const trimmed = url.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  if (trimmed.startsWith('/api/songs/')) {
+    return trimmed
+  }
+
+  if (trimmed.includes('minio:9000') || trimmed.includes('/flowbeat-songs/')) {
+    return `/api/songs/${songId}/cover`
+  }
+
+  return trimmed
+}
+
 export const useCoverStore = defineStore('cover', () => {
   const cache = ref<Map<number, string>>(new Map())
 
@@ -68,7 +85,8 @@ export const useCoverStore = defineStore('cover', () => {
         try {
           const result = await getSongCoversBatch(idsToFetch)
           for (const [id, url] of Object.entries(result)) {
-            cache.value.set(Number(id), url)
+            const songId = Number(id)
+            cache.value.set(songId, normalizeCoverUrl(songId, url))
           }
           // 对于后端未返回的 ID（无封面），也标记为空字符串避免重复请求
           for (const id of idsToFetch) {
@@ -92,9 +110,17 @@ export const useCoverStore = defineStore('cover', () => {
    * 获取某首歌的封面 URL（仅读缓存，不触发请求）。
    */
   function getCoverUrl(songId: number): string {
-    return cache.value.get(songId) ?? ''
+    const cached = cache.value.get(songId)
+    if (!cached) {
+      return ''
+    }
+
+    const normalized = normalizeCoverUrl(songId, cached)
+    if (normalized !== cached) {
+      cache.value.set(songId, normalized)
+    }
+    return normalized
   }
 
   return { resolveCovers, getCoverUrl, cache }
 })
-

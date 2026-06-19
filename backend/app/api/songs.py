@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import RedirectResponse
+from collections.abc import Iterator
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from minio import Minio
+from minio.error import S3Error
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthContext, get_auth_context
 from app.core.cache import get_redis_client
+from app.core.config import settings
 from app.core.storage import get_minio_client
 from app.db.session import get_db_session
 from app.schemas.music import (
@@ -23,6 +27,45 @@ from app.schemas.music import (
 from app.services.song_service import SongService
 
 router = APIRouter(prefix="/api/songs", tags=["songs"])
+
+
+def _stream_object_response(
+    minio_client: Minio,
+    *,
+    bucket_name: str,
+    object_key: str,
+) -> StreamingResponse:
+    """将 MinIO 对象包装成可直接给浏览器消费的流式响应。"""
+    try:
+        stat = minio_client.stat_object(bucket_name, object_key)
+        object_stream = minio_client.get_object(bucket_name, object_key)
+    except S3Error as exc:
+        if exc.code in {"NoSuchKey", "NoSuchObject"}:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="对象不存在"
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="对象存储暂不可用，请稍后重试",
+        ) from exc
+
+    def chunk_iter() -> Iterator[bytes]:
+        try:
+            while True:
+                chunk = object_stream.read(64 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            object_stream.close()
+            object_stream.release_conn()
+
+    headers = {}
+    if getattr(stat, "size", None) is not None:
+        headers["Content-Length"] = str(stat.size)
+
+    media_type = getattr(stat, "content_type", None) or "application/octet-stream"
+    return StreamingResponse(chunk_iter(), media_type=media_type, headers=headers)
 
 
 @router.get("/search", response_model=SongSearchResponse)
@@ -74,6 +117,28 @@ async def get_song_stream(
     return await service.get_song_stream(song_id)
 
 
+@router.get("/{song_id}/stream/file")
+async def stream_song_file(
+    song_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    minio_client: Minio = Depends(get_minio_client),
+) -> StreamingResponse:
+    """直接流式输出歌曲音频文件。"""
+    service = SongService(db, minio_client=minio_client)
+    stream_stmt = await service.get_song_detail(song_id)
+    if not stream_stmt.audio_object_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="该歌曲暂无可播放音频",
+        )
+
+    return _stream_object_response(
+        minio_client,
+        bucket_name=settings.minio_song_bucket,
+        object_key=stream_stmt.audio_object_key,
+    )
+
+
 @router.post("/covers", response_model=SongCoversResponse)
 async def get_song_covers(
     payload: SongCoversRequest,
@@ -86,13 +151,25 @@ async def get_song_covers(
     return await service.get_song_covers_batch(payload.song_ids)
 
 
-@router.get("/{song_id}/cover", response_class=RedirectResponse)
+@router.get("/{song_id}/cover", response_class=StreamingResponse)
 async def get_song_cover(
     song_id: int,
     db: AsyncSession = Depends(get_db_session),
     minio_client: Minio = Depends(get_minio_client),
-) -> RedirectResponse:
-    """获取单首歌曲封面跳转地址。"""
+) -> StreamingResponse:
+    """直接流式输出单首歌曲封面。"""
     service = SongService(db, minio_client=minio_client)
-    cover_url = await service.get_song_cover(song_id)
-    return RedirectResponse(url=cover_url, status_code=307)
+    _ = await service.get_song_cover(song_id)
+    cover_stmt = await service.get_song_detail(song_id)
+    if not cover_stmt.audio_object_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="该歌曲暂无可展示封面",
+        )
+
+    cover_object_key = service._build_cover_object_key(cover_stmt.audio_object_key)
+    return _stream_object_response(
+        minio_client,
+        bucket_name=settings.minio_song_bucket,
+        object_key=cover_object_key,
+    )

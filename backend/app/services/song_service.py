@@ -6,7 +6,6 @@ import asyncio
 import hashlib
 import logging
 import re
-from datetime import timedelta
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -66,7 +65,18 @@ class SongService:
     _SEARCH_CACHE_KEY_VERSION = 1
     _SEARCH_CACHE_TTL_SECONDS = 300
     _SEARCH_TOKEN_PATTERN = re.compile(r"[0-9A-Za-z\u4e00-\u9fff]+")
-    _COVER_CACHE_TTL_SECONDS = 1800  # 封面 presign URL 缓存 30 分钟
+    _COVER_CACHE_TTL_SECONDS = 1800  # 封面路由缓存 30 分钟
+    _COVER_CACHE_KEY_VERSION = 2
+
+    @staticmethod
+    def _build_cover_route(song_pk: int) -> str:
+        """生成前端可直接访问的封面路由。"""
+        return f"/api/songs/{song_pk}/cover"
+
+    @staticmethod
+    def _build_stream_route(song_pk: int) -> str:
+        """生成前端可直接访问的音频路由。"""
+        return f"/api/songs/{song_pk}/stream/file"
 
     @classmethod
     def _build_search_cache_key(
@@ -350,7 +360,7 @@ class SongService:
         )
 
     async def get_song_stream(self, song_id: int) -> SongStreamResponse:
-        """签发 MinIO 预签名播放地址。"""
+        """返回前端可直接访问的音频路由。"""
         stream_stmt = select(Song.id, Song.audio_object_key).where(Song.id == song_id)
         row = (await self.db.execute(stream_stmt)).first()
 
@@ -371,11 +381,10 @@ class SongService:
             )
 
         try:
-            stream_url = await run_in_threadpool(
-                self.minio_client.presigned_get_object,
+            await run_in_threadpool(
+                self.minio_client.stat_object,
                 settings.minio_song_bucket,
                 row.audio_object_key,
-                expires=timedelta(seconds=settings.minio_presign_expires_seconds),
             )
         except S3Error as exc:
             if exc.code in {"NoSuchKey", "NoSuchObject"}:
@@ -395,12 +404,12 @@ class SongService:
 
         return SongStreamResponse(
             song_id=int(row.id),
-            stream_url=stream_url,
+            stream_url=self._build_stream_route(int(row.id)),
             expires_in_seconds=settings.minio_presign_expires_seconds,
         )
 
     async def get_song_cover(self, song_id: int) -> str:
-        """签发 MinIO 预签名封面地址。"""
+        """返回前端可直接访问的封面路由。"""
         cover_stmt = select(Song.id, Song.audio_object_key).where(Song.id == song_id)
         row = (await self.db.execute(cover_stmt)).first()
 
@@ -423,11 +432,10 @@ class SongService:
         cover_object_key = self._build_cover_object_key(str(row.audio_object_key))
 
         try:
-            return await run_in_threadpool(
-                self.minio_client.presigned_get_object,
+            await run_in_threadpool(
+                self.minio_client.stat_object,
                 settings.minio_song_bucket,
                 cover_object_key,
-                expires=timedelta(seconds=settings.minio_presign_expires_seconds),
             )
         except S3Error as exc:
             if exc.code in {"NoSuchKey", "NoSuchObject"}:
@@ -445,19 +453,19 @@ class SongService:
                 detail="封面服务网络异常，请稍后重试",
             ) from exc
 
+        return self._build_cover_route(int(row.id))
+
     @classmethod
     def _build_cover_cache_key(cls, song_pk: int) -> str:
-        """封面 presign URL 缓存 key。"""
-        return f"cover:presign:{song_pk}"
+        """封面路由缓存 key。"""
+        return f"cover:route:v{cls._COVER_CACHE_KEY_VERSION}:{song_pk}"
 
     async def get_song_covers_batch(self, song_ids: list[int]) -> SongCoversResponse:
         """批量签发 MinIO 预签名封面地址。
 
-        优先从 Redis 读取缓存，未命中的 ID 再通过 DB + MinIO presign 解析。
-        使用信号量限制并发 presign 数量，避免 threadpool 饱和。
+        优先从 Redis 读取缓存，未命中的 ID 再通过 DB 解析为前端可访问路由。
         """
-        minio_client = self.minio_client
-        if not song_ids or minio_client is None:
+        if not song_ids:
             return SongCoversResponse(covers={})
 
         unique_ids = list(dict.fromkeys(song_ids))[:100]
@@ -471,7 +479,7 @@ class SongService:
                 cached_values = await self.redis_client.mget(cache_keys)
                 for sid, cached in zip(unique_ids, cached_values):
                     if cached:
-                        covers[sid] = cached
+                        covers[sid] = self._build_cover_route(sid)
                     else:
                         ids_to_presign.append(sid)
             except Exception:
@@ -482,46 +490,22 @@ class SongService:
         if not ids_to_presign:
             return SongCoversResponse(covers=covers)
 
-        # ---- 阶段 2：查询需要 presign 的行 ----
+        # ---- 阶段 2：查询需要解析的行 ----
         cover_stmt = select(Song.id, Song.audio_object_key).where(
             Song.id.in_(ids_to_presign)
         )
         rows = (await self.db.execute(cover_stmt)).all()
 
-        # ---- 阶段 3：受信号量保护的并发 presign ----
-        async def presign_one(
-            song_pk: int, audio_object_key: str
-        ) -> tuple[int, str] | None:
-            cover_object_key = self._build_cover_object_key(audio_object_key)
-            async with _PRESIGN_SEMAPHORE:
-                try:
-                    url = await run_in_threadpool(
-                        minio_client.presigned_get_object,
-                        settings.minio_song_bucket,
-                        cover_object_key,
-                        expires=timedelta(
-                            seconds=settings.minio_presign_expires_seconds
-                        ),
-                    )
-                    return (song_pk, url)
-                except Exception:
-                    return None
-
-        tasks = [
-            presign_one(int(row.id), str(row.audio_object_key))
-            for row in rows
-            if row.audio_object_key
-        ]
-        results = await asyncio.gather(*tasks)
-
-        # ---- 阶段 4：写入缓存 & 汇总结果 ----
+        # ---- 阶段 3：生成前端可访问路由并写入缓存 ----
         cache_pipeline_items: list[tuple[str, str]] = []
-        for result in results:
-            if result is not None:
-                covers[result[0]] = result[1]
-                cache_pipeline_items.append(
-                    (self._build_cover_cache_key(result[0]), result[1])
-                )
+        for row in rows:
+            if not row.audio_object_key:
+                continue
+            cover_url = self._build_cover_route(int(row.id))
+            covers[int(row.id)] = cover_url
+            cache_pipeline_items.append(
+                (self._build_cover_cache_key(int(row.id)), cover_url)
+            )
 
         if cache_pipeline_items and self.redis_client is not None:
             try:
